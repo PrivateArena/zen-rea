@@ -91,7 +91,9 @@ scripts that is `patch_0.2.3.pck`; for files only in the bridge (e.g. `tower_tra
 | `base_remaps/` | the 134 `.gd.remap` files extracted from the retail PCK (needed to name the originals) |
 | `merged_probe.pck`, `build_0.2.0(.pck)` | bridge/patch packs with the base remaps grafted on (`--pck-patch`) so `--recover` can decompile them |
 | `scripts_full_0.2.3/` (58 `.gd`), `scripts_full_0.2.0/` (117 `.gd`) | per-layer decompiles |
-| **`effective_0.2.3/`** | **167 `.gd` = base(0.1.273) ← bridge ← patch, the tree the shipped game really executes.** Read this one. |
+| **`effective_0.2.3/`** | **167 `.gd` = base(0.1.273) ← bridge ← patch, the tree the shipped game really executes. Read this one — and edit THIS one: it is git-tracked, so `git diff v0.2.3-decompiled` after an edit is the whole mod.** |
+| `build/`, `out/` | generated: `build/*.gdc` (GDRE compile of the edited scripts) → `out/patch_0.2.3.pck` (shippable pack). Ignored by git, rebuild with the block below |
+| `probe_fidelity/` | `game_data.gdc` recompiled from its own decompile (194 B / 0.05 % smaller than the shipped one → GDRE round-trip is *not* byte-provable, which is why we prefer editing small scripts) |
 
 Recipe that produced them (GDRE only decompiles a `.gdc` when a matching `.remap` sits beside it,
 hence the graft step; the 33+9 scripts that are *new* in the patches were finished one-by-one with
@@ -110,17 +112,38 @@ P="/home/jang/.local/share/godot/app_userdata/Midgard Survivors"
 
 ## 6. Mod pipeline (recommended: patch the patch)
 
+Launcher: **`../../play.sh`** (`--status` shows the effective version and flags a MODIFIED pack by
+sha256, `--layer <file>` answers "which pack owns this member", `--isolate` runs against a sandbox
+`user://` so real saves are never touched). Note §3: passing anything after `--` turns patch mounting
+off, so the mod must be tested without such args.
+
 ```sh
-# one edited script, e.g. the balance table
-cd $W/60_patches/mod
-"$G/gdre_tools" --compile=game_data.gd --bytecode=4.5.0-stable --output=build      # -> build/game_data.gdc (rev 101)
+# one edited script, e.g. the balance table (edited under effective_0.2.3/, the git-tracked source)
+cd $W/60_patches
+mkdir -p build out
+"$G/gdre_tools" --compile=effective_0.2.3/scripts/autoload/game_data.gd --bytecode=4.5.0-stable --output=build
+#   -> build/game_data.gdc (GDSC rev 101)
 "$G/gdre_tools" --pck-patch="$P/patches/patch_0.2.3.pck" \
    --patch-file="$PWD/build/game_data.gdc=res://scripts/autoload/game_data.gdc" \
-   --output=$W/60_patches/out/patch_0.2.3.pck                                     # ~11 MB, preserves format 4
+   --output=$W/60_patches/out/patch_0.2.3.pck                          # ~11 MB, preserves format 4
 # verify offline, then swap (keep the original in patches2/)
 "$G/gdre_tools" --list-files=$W/60_patches/out/patch_0.2.3.pck | tail -2
 "$G/gdre_tools" --extract=$W/60_patches/out/patch_0.2.3.pck --include='res://scripts/autoload/game_data.gdc' --output=verify
 sha256sum build/game_data.gdc verify/scripts/autoload/game_data.gdc
+```
+
+Build the file list from git, so nothing edited can be forgotten:
+
+```sh
+cd "$W/.."                              # = zen-rea/, the git repo
+ARGS=()
+for gd in $(git diff --name-only v0.2.3-decompiled -- work/60_patches/effective_0.2.3 | grep '\.gd$'); do
+  res="res://${gd#work/60_patches/effective_0.2.3/}"; res="${res%.gd}.gdc"
+  "$G/gdre_tools" --compile="$gd" --bytecode=4.5.0-stable --output="$W/60_patches/build"
+  ARGS+=("--patch-file=$W/60_patches/build/$(basename "$res")=$res")
+done
+"$G/gdre_tools" --pck-patch="$P/patches/patch_0.2.3.pck" "${ARGS[@]}" \
+                --output="$W/60_patches/out/patch_0.2.3.pck"
 ```
 
 * `--pck-patch` never touches the input file, so the live pack stays intact until we move the output
@@ -133,6 +156,14 @@ sha256sum build/game_data.gdc verify/scripts/autoload/game_data.gdc
   `updater.gd` to also mount `user://patches/mod.pck` *after* the official ones, then iterate on
   `mod.pck` only. Costs a full writable copy of the game directory (~1 GB, hardlinkable except the
   PCK) and one extra `--pck-patch` of the 557 MB pack. Worth it only if we expect many iterations.
+
+## 8. Version control of this work
+
+One repo at the project root, default-deny `.gitignore` (text only: 177 files / 5.6 MB → GitHub).
+`effective_0.2.3/` is committed and tagged **`v0.2.3-decompiled`**, so the pristine live build is the
+baseline and every balance edit is a reviewable `git diff` that also drives the build list above.
+`work/40_mod/.git` was deleted 2026-11-19 (813 MB of objects for a 2.0 GB duplicate of
+`30_recovered/`, path+size identical and a 60-file md5 sample with zero mismatches).
 
 ## 7. Balance map (v0.2.3, for the nerf work)
 

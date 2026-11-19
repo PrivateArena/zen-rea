@@ -21,7 +21,8 @@ Tools are invoked only through the wrappers in `/media/jang/home/PortableApp/re/
 | `20_extracted/` | **intentionally EMPTY** — the landing dir for raw `gdre_tools --extract` output (unmodified members: `.gdc`, `.remap`, `.ctex`, …) | `re/bin/gdre_tools --extract=<PCK> --output=…` | re-run `--extract` |
 | `25_scripts/` | scripts-only decompile: 131 `.gd` + 131 `.gd.uid` + `project.godot`, `.godot/` cache, `gdre_export.log`, and `.autoconverted/` holding the 131 original `.gdc`. No `.remap` survives — GDRE consumes them | `re/bin/gdre_tools --recover=<PCK> --scripts-only --output=…` | re-run item 11.4 |
 | `30_recovered/` | full recovered project (scenes, resources, imported assets) — the runnable Godot project | `re/bin/gdre_tools --recover=<PCK> --output=…` | re-run item 11.5 (space-gated; staged as `30_recovered.tmp` and `mv`d only on exit 0) |
-| `40_mod/` | `git`-baseline copy of `30_recovered/`; the **only** place edits happen | `cp -a` + `git init` (item 11.6) | re-run item 11.6 |
+| `40_mod/` | study copy of `30_recovered/` (byte-identical). Its `git` baseline was **removed 2026-11-19** (813 MB of pack for 14 k files we never edit). No balance work happens here — see `60_patches/` | `cp -a` of `30_recovered/` (item 11.6) |
+| `60_patches/` | **the live patch layer, and where modding happens.** `PATCH_SYSTEM.md` = findings; `effective_0.2.3/` = merged decompiled source (git-tracked reference); `mod/` = our edits + build script; `out/` = built pack | `--extract` + `--pck-patch` + `--recover --scripts-only`, see `PATCH_SYSTEM.md` §5 |
 | `logs/` | captured stdout/stderr of every tool: `pck-files.txt`, per-step `.log`, plus scratch like `one-gdc/` | all three wrappers, shell redirection | re-run the corresponding step |
 | `50_roundtrip/` | **write-path** sandbox: edited `.gd` → GDRE-compiled `.gdc` (rev 101) → `--pck-patch`ed pack → `--list-files`/hash proof → ready-to-launch `launch_test/MidgardSurvivorsRT/` fixture. VERBATIM recipe + all measurements: `50_roundtrip/REPORT.md` | `re/bin/gdre_tools --compile/--decompile/--pck-patch/--pck-create`, `re/bin/rea extract-artifact` | re-run the command list in `50_roundtrip/REPORT.md` |
 
@@ -30,6 +31,19 @@ Tools are invoked only through the wrappers in `/media/jang/home/PortableApp/re/
 §7 F-SPACE). The two `--recover` passes give us usable `.gd`/`.tscn` output directly, so the raw
 extraction is skipped until someone actually needs original bytes (e.g. to hexdump a `.gdc`
 header — for that we extract a single member into `logs/one-gdc/` instead of the whole archive).
+
+## Version control (changed 2026-11-19)
+
+One git repo, at the **project root** (`zen-rea/.git`), tracking *text only* — 177 files / 5.6 MB,
+so it can be pushed to GitHub for long-term maintenance:
+
+* `AGENTS.md`, `ARCHITECTURE_PLAN_*.md`, this file, `play.sh`
+* `work/60_patches/PATCH_SYSTEM.md`, `work/50_roundtrip/REPORT.md`
+* `work/60_patches/effective_0.2.3/**.gd` — pristine decompile of the live 0.2.3 build, tagged
+  `v0.2.3-decompiled`. **Diffs against that tag are exactly "what the mod changed".**
+
+Everything else under `work/` is ignored (2 GB recovered assets, 3 .pck packs, raw `.gdc`, evidence
+JSON, logs) — all regenerable with the block below. Never `git add -f` a `.pck`/`.gdc`.
 
 ## Pipeline command block
 
@@ -78,8 +92,8 @@ if [ "$rc" -eq 0 ]; then rmdir "$W/30_recovered" && mv "$W/30_recovered.tmp" "$W
 else rm -rf "$W/30_recovered.tmp"; fi
 
 # 6. mod baseline (only if free space > 2 x du(30_recovered))
-cp -a "$W/30_recovered/." "$W/40_mod/"
-git -C "$W/40_mod" init -b main
+cp -a "$W/30_recovered/." "$W/40_mod/"          # study copy; no git anymore
+git -C "$W/40_mod" init -b main                  # OBSOLETE (2026-11-19): repo lives at project root
 git -C "$W/40_mod" add -A
 git -C "$W/40_mod" -c user.name=rea -c user.email=rea@local commit -q \
     -m "baseline: GDRE 2.7.4 recovery of MidgardSurvivors.pck"
