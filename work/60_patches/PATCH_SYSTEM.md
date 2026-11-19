@@ -462,3 +462,26 @@ offers** (was 1 in 40), epic+legendary ≈ 36 %.
 **New probe:** `user://mod_probe_choices.txt` (rewritten every 64 rolls) shows the measured
 distribution — `rolls=… Epica=… Legendaria=… P(legend)=x.x%` — so the rate is verifiable from your own
 run instead of from this table.
+
+## 13. Mod v5 — Tower wheel rebalanced (installed, pack sha see `./play.sh --status`)
+
+`GameData.TOWER_WHEEL` (`autoload/game_data.gd:298`) is a 10-slot rim rolled by the single
+`TowerEvents._wheel_pick()` (`core/tower_events.gd:483`, one `randf()`), used for every spin
+(`TOWER_WHEEL_SPINS = 4` per event, solo: `_wheel_turns()` returns `[]` so the loop runs 4 times), plus
+the host-side timeout re-roll in `_tick_wheel`. Shipped weights: 5 buffs `w=12`, 4 curses `w=8`,
+`super` `w=3` (Σ 95).
+
+Re-weighted by id inside `_wheel_pick` via the inserted `_wheel_w()` helper (`MOD_WHEEL_W`), so the
+table, the `mods`, the `floors` duration of curses and the whole UI stay as shipped. Measured with the
+real Godot runtime by replaying the patched `_wheel_pick` (200 000 events × 4 spins, vanilla twin
+side by side):
+
+| slot | vanilla | mod v5 |
+| --- | --- | --- |
+| `super` — ¡GRACIA DE LUCILE! (+50% dmg, +40% hp, +25% aspd, +15% move, permanent) | 3.15 % | **28.04 %** |
+| each buff (Furia / Corazón de hierro / Pulso veloz / Suerte / Viento) | 12.6 % | 14.1 % |
+| each curse (`curse_dull` -20% dmg, `curse_frail` -20% vida, `curse_heavy` -15% mov, `curse_slow` +25% rec) | 8.4 % | **0.39 %** |
+| per event (4 spins): at least one curse | **80.7 %** | **6.1 %** |
+| per event: at least one super | 12.0 % | **73.2 %** |
+
+Probe: `user://mod_probe_wheel.txt` (rewritten every 4 spins) → `spins=… super=… (P=x%) fury=… …`.
