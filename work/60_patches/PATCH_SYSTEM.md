@@ -386,3 +386,20 @@ class. GDRE's `--compile` did **not** reject it (no project context = no full an
 decompile exposed it. `build.sh` now refuses to build unless every source line that disappears is either
 re-added verbatim or listed in `lint-allow.txt` (the three lines the mod genuinely rewrites), and
 `--deep` decompiles the built `.gdc` and lists source lines it cannot show back.
+
+### v3 (same session): probes that also measure the effect
+
+The v2 probe printed `%.1f` literally (a format placeholder inside a `const` string) and only wrote a
+file when a hit was actually capped - absence was therefore ambiguous. v3 (built sha `405d4f477bc5e166…`)
+reports values as literals and turns the probes into counters:
+
+* `mod_probe_enemy.txt` — rewritten every 512 spawns: `spawns=`, `clock_capped=n (%)` = how often the
+  round-clock cap actually engaged.
+* `mod_probe_player.txt` — first mechanics hit and every 8th: `hits`, `capped`, `avoided_total`
+  (damage the cap absorbed), `worst_hit` and its share of max HP, `last_label` = the Spanish source
+  name (`Meteoros errantes`, `Tormenta`, `La niebla de Niflheim`, …) so we can see *which* mechanic
+  dominates instead of the aggregate "Mechanics" row.
+
+Both blocks were executed verbatim under the real Godot 4.7.2 headless (throwaway `/tmp/probefmt`
+project, code extracted from the sources with awk) before shipping — the only way to catch
+format-arity mistakes, since GDRE compiles them happily and the game would just print garbage.
