@@ -212,8 +212,10 @@ func _init() -> void :
 const MOD_TIME_SCALE_CAP: = 3.0
 # [MOD] one-shot proof that this (patch-layer) script is the one the running process loaded.
 # Enemy.setup() fires on every spawn in every mode, so the probe lands within seconds of a run start.
-const MOD_TAG: = "mod-v2 time_scale_cap=%.1f tower_floor_cap=90.0 trap_pct_cap=0.10 mechanics_pct_cap=0.15"
+const MOD_TAG: = "mod-v3 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15"
 static var mod_probe_done: = false
+static var mod_probe_spawns: = 0
+static var mod_clock_capped: = 0
 const NO_RANGED: = {}
 var _ranged: Dictionary = NO_RANGED
 
@@ -238,13 +240,20 @@ func setup(p_id: String, hp_scale: float, renderer: MobRenderer = null, time_sca
 	if time_scale > MOD_TIME_SCALE_CAP:
 		hp_scale /= time_scale / MOD_TIME_SCALE_CAP
 		time_scale = MOD_TIME_SCALE_CAP
+		mod_clock_capped += 1
 	id = p_id
-	if not mod_probe_done:
+	# [MOD] mount + effect probe: Enemy.setup() runs for every spawn in every mode, so the file appears
+	# a second after a run starts, and is rewritten every 512 spawns with the running counters.
+	mod_probe_spawns += 1
+	if not mod_probe_done or mod_probe_spawns % 512 == 0:
 		mod_probe_done = true
-		print("MODPROBE enemy.gd mounted: %s pid=%d" % [MOD_TAG, OS.get_process_id()])
+		print("MODPROBE enemy.gd mounted: %s pid=%d spawns=%d clock_capped=%d" % [
+			MOD_TAG, OS.get_process_id(), mod_probe_spawns, mod_clock_capped])
 		var mf: = FileAccess.open("user://mod_probe_enemy.txt", FileAccess.WRITE)
 		if mf != null:
-			mf.store_string("%s\nmonster=%s\npid=%d\nat=%s\n" % [MOD_TAG, p_id, OS.get_process_id(), Time.get_datetime_string_from_system()])
+			mf.store_string("%s\nmonster=%s\nspawns=%d\nclock_capped=%d (%.1f%%)\npid=%d\nat=%s\n" % [
+				MOD_TAG, p_id, mod_probe_spawns, mod_clock_capped, 100.0 * mod_clock_capped / mod_probe_spawns,
+				OS.get_process_id(), Time.get_datetime_string_from_system()])
 			mf.close()
 	def = GameData.MONSTERS[id]
 	cc_dr = {}

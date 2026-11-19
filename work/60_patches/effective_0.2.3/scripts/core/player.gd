@@ -9,8 +9,11 @@ extends Node3D
 const MOD_MECH_PCT_CAP: = 0.15
 # hits bigger than 4x max HP are the game's own executions (main.gd tour/debug kills use 1e9..1e12)
 const MOD_MECH_EXECUTE_OVER: = 4.0
-const MOD_TAG: = "mod-v2"
-static var mod_mech_probe: = false
+const MOD_TAG: = "mod-v3 mechanics cap=0.15"
+static var mod_mech_hits: = 0
+static var mod_mech_capped: = 0
+static var mod_mech_saved: = 0.0
+static var mod_mech_worst: = 0.0
 
 
 signal leveled_up
@@ -3571,21 +3574,28 @@ func take_damage(amount: float, world: World, from: Enemy = null, pierce: = fals
 
 
 	# [MOD] apply the ceiling after all mitigation, before shields absorb, so the number the meter and
-	# the run log show is the one that can actually kill.
+	# the run log show is the one that can actually kill. The probe reports every mechanics hit at first
+	# and then every 8th, with running totals, so the file also proves the cap is engaging (or that the
+	# hits were already below it).
 	if pierce and from == null and amount < max_hp * MOD_MECH_EXECUTE_OVER:
+		var raw: = amount
 		var ceiling: = max_hp * MOD_MECH_PCT_CAP
-		if amount > ceiling:
-			if not mod_mech_probe:
-				mod_mech_probe = true
-				print("MODPROBE %s capped mechanics hit %.0f -> %.0f of max_hp %.0f (%.2f -> %.2f) by %s" % [
-					MOD_TAG, amount, ceiling, max_hp, amount / max_hp, MOD_MECH_PCT_CAP, what])
-				var mf: = FileAccess.open("user://mod_probe_player.txt", FileAccess.WRITE)
-				if mf != null:
-					mf.store_string("%s first capped hit\nlabel=%s\nhit=%.0f -> %.0f\nmax_hp=%.0f (%.2f -> %.2f of it)\npid=%d\nat=%s\n" % [
-						MOD_TAG, what, amount, ceiling, max_hp, amount / max_hp, MOD_MECH_PCT_CAP, OS.get_process_id(), 
-						Time.get_datetime_string_from_system()])
-					mf.close()
+		if raw > ceiling:
+			mod_mech_capped += 1
+			mod_mech_saved += raw - ceiling
+			mod_mech_worst = maxf(mod_mech_worst, raw)
 			amount = ceiling
+		mod_mech_hits += 1
+		if mod_mech_hits == 1 or mod_mech_hits % 8 == 0:
+			print("MODPROBE %s mechanics hit #%d '%s': %.0f -> %.0f of max_hp %.0f (was %.2f, cap %.2f) | capped %d, avoided %.0f" % [
+				MOD_TAG, mod_mech_hits, what, raw, amount, max_hp, raw / max_hp, MOD_MECH_PCT_CAP, mod_mech_capped, 
+				mod_mech_saved])
+			var mf: = FileAccess.open("user://mod_probe_player.txt", FileAccess.WRITE)
+			if mf != null:
+				mf.store_string("%s\nhits=%d\ncapped=%d\navoided_total=%.0f\nworst_hit=%.0f (%.2f of max_hp)\nlast_label=%s\nlast_hit=%.0f -> %.0f\nmax_hp=%.0f\npid=%d\nat=%s\n" % [
+					MOD_TAG, mod_mech_hits, mod_mech_capped, mod_mech_saved, mod_mech_worst, mod_mech_worst / max_hp,
+					what, raw, amount, max_hp, OS.get_process_id(), Time.get_datetime_string_from_system()])
+				mf.close()
 	if not touch and not hazard and effects.has("hit_shield") and world.clock >= _gryphon_at:
 
 		_gryphon_at = world.clock + GameData.GRYPHON_GUARD_CD
