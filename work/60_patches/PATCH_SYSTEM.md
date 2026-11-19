@@ -463,7 +463,7 @@ offers** (was 1 in 40), epic+legendary ≈ 36 %.
 distribution — `rolls=… Epica=… Legendaria=… P(legend)=x.x%` — so the rate is verifiable from your own
 run instead of from this table.
 
-## 13. Mod v5 — Tower wheel rebalanced (installed, pack sha see `./play.sh --status`)
+## 13. Mod v5 — Tower wheel rebalanced (installed, pack sha `c2900c95fb773704…`)
 
 `GameData.TOWER_WHEEL` (`autoload/game_data.gd:298`) is a 10-slot rim rolled by the single
 `TowerEvents._wheel_pick()` (`core/tower_events.gd:483`, one `randf()`), used for every spin
