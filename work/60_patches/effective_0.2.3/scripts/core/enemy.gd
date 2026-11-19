@@ -207,6 +207,9 @@ func _init() -> void :
 
 
 
+# [MOD] ceiling for the time-in-round scaling curve (see Enemy.setup): at most 3x the monster table
+# HP/damage from the round clock. Tower-floor and hell-level growth are separate and stay as designed.
+const MOD_TIME_SCALE_CAP: = 3.0
 const NO_RANGED: = {}
 var _ranged: Dictionary = NO_RANGED
 
@@ -224,6 +227,13 @@ var _touch_wait: = {}
 func setup(p_id: String, hp_scale: float, renderer: MobRenderer = null, time_scale: = -1.0, own_sprite: = false) -> void :
 	if time_scale < 0.0:
 		time_scale = hp_scale
+	# [MOD] cap the time-in-round curve only (scale_hp = 1 + t/150 reaches 9.9x at 20 min, and on tower
+	# floors scale_time() = 5 s per floor so it is already at 9.9x around floor 267). hp_scale also
+	# carries the danger/hell/coop/karma multipliers, so those are kept: the excess time factor is
+	# divided out instead of clamping the whole product, and the same cap then bounds contact damage.
+	if time_scale > MOD_TIME_SCALE_CAP:
+		hp_scale /= time_scale / MOD_TIME_SCALE_CAP
+		time_scale = MOD_TIME_SCALE_CAP
 	id = p_id
 	def = GameData.MONSTERS[id]
 	cc_dr = {}

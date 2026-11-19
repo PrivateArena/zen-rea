@@ -210,3 +210,40 @@ and a cadence that tightens to 2.0 s. Because the call passes `pierce=true, haza
 armour+VIT (`player.gd:3558`), skips grade mitigation (`:3459`), cuts Guard chance ×0.25
 (`:3509`, `HELL_BLOCK_MULT`), pierces 60 % of shields (`:3560`, `HELL_SHIELD_PIERCE`), and is
 explicitly excluded from the "¡Aguanta!" one-hit death save (`:3600-3604`).
+
+## 9. Mod v1 — installed 2026-11-19 (built pack sha `954f68c592f08da0…`)
+
+Trigger: a real 0.2.3 run died at **Endless Tower floor 267 to `Roca de la torre`** (22 min, Lv 460,
+134.9 Qi/s, 4.6 M damage taken). Three scripts edited under `effective_0.2.3/`, nothing else touched
+— `game_data.gd`, `main.gd` and `player.gd` stay byte-untouched on purpose (§5 `probe_fidelity/`).
+
+| Knob (file) | Vanilla | Mod v1 | Why |
+| --- | --- | --- | --- |
+| `MOD_TOWER_FLOOR_CAP` (`core/tower_run.gd:8`) — exponent of `TOWER_HP_STEP` / `TOWER_DMG_STEP` | unbounded: floor 267 → HP ×5.4e6, dmg ×9 414 | `90.0` → past floor ~91 HP ≤ ×189, dmg ≤ ×22 | floors 1-90 stay exactly vanilla; the exponential tail (and Hel `eff() = 100 + 5f`, which is what makes a "floor 20" be evaluated as floor 200) is what is absurd. Speed growth left alone |
+| `MOD_TIME_SCALE_CAP` (`core/enemy.gd:212`) — round clock `scale_hp = 1 + t/150` | floor 267 ⇒ `scale_time` 1 330 s ⇒ HP ×9.87, contact dmg ×7.90 | `3.0` ⇒ ×3.00 and ×2.75 | clamped *by dividing the excess time factor out of* `hp_scale`, so the danger/hell/coop/karma multipliers inside it are preserved; the same cap bounds `time_scale`, which feeds `damage` at `enemy.gd:243` |
+| `MOD_TRAP_PCT_CAP` (`core/tower_traps.gd`) | hazard = 30 % of *our own* max HP per hit at floor 267; ×3.0 from the stillness stack ⇒ 90 % | `0.1` ⇒ 10 %, worst 30 % | clamped in `tick()` **and** in all five leaf hazards (`_bolts`, `_beams`, `_spikes`, `_boulder`, `_refuge`), so `survive_strike()` cannot bypass it |
+| `MOD_TRAP_EVERY_MIN` | cadence tightens to 2.0 s past floor 100 | `4.0` s | half as many hazards |
+| `MOD_TRAP_MAX` | `many` = 3 concurrent hazards ≥ floor 250 | `2` | |
+
+Not changed (next levers if high-`danger` stages still feel unfair — all of these live in
+`game_data.gd`, so using them means recompiling that 11 762-line file): `HELL_HP 2.0` /
+`HELL_HP_LATE 2.15` per hell level, `DANGER_HP_CROWD(_LATE) 1.24/1.34`, `ENDLESS_MOB_HP_GROWTH 1.36`
+per 40 s, `spawn_rate 1 + t/170`, `TOWER_CROWD 32`. A cheaper alternative that keeps `game_data.gd`
+untouched: cap the *total* multiplier arriving in `Enemy.setup` (a `MOD_HP_SCALE_CAP` alongside
+`MOD_TIME_SCALE_CAP`), which trims the hell tail without touching the tables.
+
+Build / ship / undo (one command each, all verified offline — only the game launch is a human step):
+
+```sh
+./build.sh                 # compile changed scripts -> out/patch_0.2.3.pck + member-hash verification
+./build.sh --install       # + back the official pack up to orig/ and drop it into user://patches
+./build.sh --restore       # put the pristine official pack back
+./build.sh --diff          # review the source changes (git diff against v0.2.3-decompiled)
+```
+
+`build.sh` derives its file list from `git diff v0.2.3-decompiled`, always patches the **official**
+pack (`orig/` once it exists, so mods never stack), refuses a modded base pack, and checks that every
+other member survived. Verification evidence for v1: `members 123 -> 124` (the added one is
+`res://scripts/core/tower_traps.gdc`, which no layer shipped in this pack), 3/3 replaced members
+sha256-match `build/*.gdc`, all 120 other members present, and `decompile(compile(source))` differs
+from the source only by stripped comments — i.e. the shipped bytecode carries exactly our edit.

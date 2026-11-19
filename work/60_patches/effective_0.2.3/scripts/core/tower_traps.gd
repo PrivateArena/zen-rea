@@ -7,6 +7,13 @@ extends RefCounted
 
 const DODGE_HEAL: = 0.02
 
+# [MOD] Endless Tower hazard nerf (see work/60_patches/PATCH_SYSTEM.md §7): hard ceiling on the share
+# of max HP a tower hazard takes per hit, on the fastest cadence, and on how many hazards may land at
+# once. Clamped again in every leaf below so no caller can bypass it.
+const MOD_TRAP_PCT_CAP: = 0.1
+const MOD_TRAP_EVERY_MIN: = 4.0
+const MOD_TRAP_MAX: = 2
+
 var world: World
 var _t: = 4.0
 var _said: = 0
@@ -35,6 +42,7 @@ func tick(delta: float, at_floor: int) -> void :
 	var every: = maxf(GameData.TOWER_TRAP_EVERY_MIN, GameData.TOWER_TRAP_EVERY - up * GameData.TOWER_TRAP_EVERY_STEP)
 	if past > 0:
 		every = maxf(GameData.TOWER_PAST_TRAP_EVERY_MIN, every - past * GameData.TOWER_PAST_TRAP_EVERY_STEP)
+	every = maxf(MOD_TRAP_EVERY_MIN, every)
 	_t = every * randf_range(0.85, 1.15)
 	var kinds: Array = []
 	for k in GameData.TOWER_TRAPS:
@@ -46,8 +54,9 @@ func tick(delta: float, at_floor: int) -> void :
 	var pct: = minf(GameData.TOWER_TRAP_PCT_MAX, GameData.TOWER_TRAP_PCT + up * GameData.TOWER_TRAP_PCT_STEP)
 	if past > 0:
 		pct = minf(GameData.TOWER_PAST_TRAP_PCT_MAX, pct + past * GameData.TOWER_PAST_TRAP_PCT_STEP)
+	pct = minf(MOD_TRAP_PCT_CAP, pct)
 	var cast: = maxf(0.9, 1.35 - up * 0.004)
-	var many: = 1 + int(at_floor >= GameData.TOWER_PAST_DOUBLE) + int(at_floor >= GameData.TOWER_PAST_TRIPLE)
+	var many: = mini(MOD_TRAP_MAX, 1 + int(at_floor >= GameData.TOWER_PAST_DOUBLE) + int(at_floor >= GameData.TOWER_PAST_TRIPLE))
 
 
 	var picked: Array = []
@@ -91,6 +100,7 @@ func survive_strike(hero: Player, stage: float, pct: float, center: Vector3, rad
 
 
 func _refuge(center: Vector3, radius: float, pct: float, cast: float) -> void :
+	pct = minf(MOD_TRAP_PCT_CAP, pct)
 	var size: = 2.2
 	var a: = randf() * TAU
 	var spot: = center + Vector3(cos(a), 0, sin(a)) * radius * randf_range(0.3, 0.65)
@@ -132,6 +142,7 @@ func _hero() -> Player:
 
 
 func _bolts(hero: Player, count: int, pct: float, cast: float) -> void :
+	pct = minf(MOD_TRAP_PCT_CAP, pct)
 	var spots: Array = [hero.position]
 	for i in count - 1:
 		var p: = world.map.find_point_around(hero.position, 2.0, 5.0)
@@ -150,6 +161,7 @@ func _bolts(hero: Player, count: int, pct: float, cast: float) -> void :
 
 
 func _beams(hero: Player, count: int, pct: float, cast: float) -> void :
+	pct = minf(MOD_TRAP_PCT_CAP, pct)
 	var base: = randf() * TAU
 	var length: = 18.0
 	var width: = 1.7
@@ -184,6 +196,7 @@ func _beams(hero: Player, count: int, pct: float, cast: float) -> void :
 
 
 func _spikes(hero: Player, pct: float, cast: float) -> void :
+	pct = minf(MOD_TRAP_PCT_CAP, pct)
 	var center: = hero.position
 	var turn: = randf() * TAU
 	var col: = Color(0.85, 0.6, 0.3)
@@ -204,6 +217,7 @@ func _spikes(hero: Player, pct: float, cast: float) -> void :
 
 
 func _boulder(hero: Player, pct: float, cast: float) -> void :
+	pct = minf(MOD_TRAP_PCT_CAP, pct)
 	var dir: = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
 	var length: = 20.0
 	var width: = 2.2
