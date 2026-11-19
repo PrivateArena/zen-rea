@@ -91,7 +91,7 @@ scripts that is `patch_0.2.3.pck`; for files only in the bridge (e.g. `tower_tra
 | `base_remaps/` | the 134 `.gd.remap` files extracted from the retail PCK (needed to name the originals) |
 | `merged_probe.pck`, `build_0.2.0(.pck)` | bridge/patch packs with the base remaps grafted on (`--pck-patch`) so `--recover` can decompile them |
 | `scripts_full_0.2.3/` (58 `.gd`), `scripts_full_0.2.0/` (117 `.gd`) | per-layer decompiles |
-| **`effective_0.2.3/`** | **167 `.gd` = base(0.1.273) ← bridge ← patch, the tree the shipped game really executes. Read this one — and edit THIS one: it is git-tracked, so `git diff v0.2.3-decompiled` after an edit is the whole mod.** |
+| **`effective_0.2.3/`** | **167 `.gd` = base(0.1.273) ← bridge ← patch, the tree the shipped game really executes. Read this one — and edit THIS one: it is git-tracked, so `git diff v0.2.3-decompiled -- work/60_patches/effective_0.2.3` after an edit is the whole mod.** |
 | `build/`, `out/` | generated: `build/*.gdc` (GDRE compile of the edited scripts) → `out/patch_0.2.3.pck` (shippable pack). Ignored by git, rebuild with the block below |
 | `probe_fidelity/` | `game_data.gdc` recompiled from its own decompile (194 B / 0.05 % smaller than the shipped one → GDRE round-trip is *not* byte-provable, which is why we prefer editing small scripts) |
 

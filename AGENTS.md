@@ -88,7 +88,7 @@ whenever a step completes.
 ```sh
 git log --oneline | head -1                # eff3d98 unless you committed something
 git status --porcelain | wc -l             # expect 0 between steps
-git diff --stat v0.2.3-decompiled          # what the mod changes, file by file
+git diff --stat v0.2.3-decompiled -- work/60_patches/effective_0.2.3   # = the mod
 ```
 
 ## Log
