@@ -9,11 +9,18 @@ extends Node3D
 const MOD_MECH_PCT_CAP: = 0.15
 # hits bigger than 4x max HP are the game's own executions (main.gd tour/debug kills use 1e9..1e12)
 const MOD_MECH_EXECUTE_OVER: = 4.0
-const MOD_TAG: = "mod-v3 mechanics cap=0.15"
+const MOD_TAG: = "mod-v4 mechanics_cap=0.15 clock_cap=3.0 choice_w=[52,27,15,6]"
 static var mod_mech_hits: = 0
 static var mod_mech_capped: = 0
 static var mod_mech_saved: = 0.0
 static var mod_mech_worst: = 0.0
+# [MOD] Level-up rarity weights, replacing GameData.CHOICE_RARITY w = [70, 22, 7, 1] (sum 100 -> a
+# Legendaria offer is 1.0% at 0 luck, 2.7% at the luck ceiling). Probabilities are w[i]/sum(w), so
+# these give 52% / 27% / 15% / 6.0% = 6x the shipped legendary rate. steps (levels granted) and the
+# all_stats bonus still come from the shipped table, and luck still shifts weight out of Comun.
+const MOD_CHOICE_W: = [52.0, 27.0, 15.0, 6.0]
+static var mod_choice_n: = [0, 0, 0, 0]
+static var mod_choice_rolls: = 0
 
 
 signal leveled_up
@@ -5193,6 +5200,11 @@ func _roll_rarity(o: Dictionary) -> void :
 	var w: Array[float] = []
 	for t in table:
 		w.append(float(t.w))
+	# [MOD] swap the rarity weights (the roll below, the luck shift and the tier->steps/all_stats lookup
+	# all keep using the shipped table, so nothing else about the offer changes)
+	if MOD_CHOICE_W.size() == w.size():
+		for i in w.size():
+			w[i] = float(MOD_CHOICE_W[i])
 	var shift: = minf(w[0] - 20.0, GameData.CHOICE_LUK_SHIFT * eff_stat("luk"))
 	w[0] -= shift
 	for i in range(1, w.size()):
@@ -5212,6 +5224,19 @@ func _roll_rarity(o: Dictionary) -> void :
 	if o.kind == "stat":
 		steps = mini(steps, GameData.STAT_HARD_CAP - cur)
 	o["rarity"] = tier
+	# [MOD] measured odds from the real run, so "is it working?" is a number and not a feeling:
+	# user://mod_probe_choices.txt (also printed) shows the distribution over every roll so far.
+	mod_choice_n[tier] += 1
+	mod_choice_rolls += 1
+	if mod_choice_rolls % 64 == 1:
+		var txt: = "rolls=%d  Comun=%d  Rara=%d  Epica=%d  Legendaria=%d  P(legend)=%.1f%%  weights=%s" % [
+			mod_choice_rolls, mod_choice_n[0], mod_choice_n[1], mod_choice_n[2], mod_choice_n[3], 
+			100.0 * mod_choice_n[3] / mod_choice_rolls, str(MOD_CHOICE_W)]
+		print("MODPROBE choices: ", txt)
+		var cf: = FileAccess.open("user://mod_probe_choices.txt", FileAccess.WRITE)
+		if cf != null:
+			cf.store_string(txt + "\nat=" + Time.get_datetime_string_from_system() + "\n")
+			cf.close()
 	o["from"] = cur
 	o["level"] = cur + steps
 

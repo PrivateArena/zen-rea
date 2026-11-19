@@ -403,3 +403,62 @@ reports values as literals and turns the probes into counters:
 Both blocks were executed verbatim under the real Godot 4.7.2 headless (throwaway `/tmp/probefmt`
 project, code extracted from the sources with awk) before shipping — the only way to catch
 format-arity mistakes, since GDRE compiles them happily and the game would just print garbage.
+
+## 12. Mod v4 — level-up rarity (installed, pack sha `3fa02c7bff41e017…`)
+
+**The roll.** `add_xp` → `leveled_up` (cosmetic only) → `main.gd:4492` opens the panel →
+`World.level_choices()` → `Player.offered_choices()` → `build_choices()` → `_choice_pool()` →
+`_pick_choices()` (weighted by entry `w`, *no rarity yet*) → then **one independent roll per card** in
+`Player._roll_rarity()` (`core/player.gd:5188`), whose only randomness is a single `randf()` over
+`GameData.CHOICE_RARITY`:
+
+```gd
+	const CHOICE_RARITY: = [                       # game_data.gd:8585
+	{"name": "Común",      "steps": 1, "w": 70.0},
+	{"name": "Rara",       "steps": 2, "w": 22.0},
+	{"name": "Épica",      "steps": 3, "w": 7.0},
+	{"name": "Legendaria", "steps": 3, "w": 1.0, "all_stats": 1}]
+	const CHOICE_LUK_SHIFT: = 1.2
+```
+
+P(tier) = `w/Σw`, and luck moves mass out of Común (`shift = min(w0 - 20, 1.2 * eff_stat("luk"))`), so
+at 0 luck a legendary is **1 %** and even at the luck ceiling only **2.7 %**. No pity, no per-run cap,
+no per-stage/danger/time ramp — that 1 % is all you ever get.
+
+**The change** is a pure insertion in `_roll_rarity`, so `game_data.gd` stays byte-untouched: the
+shipped table is read, then `w` is overwritten with `MOD_CHOICE_W = [52, 27, 15, 6]`; the roll, the
+luck shift, `steps` and `all_stats` still come from the shipped rows, and `rarity` still indexes
+`CHOICE_RARITY`, so colours/sounds/ribbons/`Legendaria · +3` are the game's own.
+
+Measured with the real Godot 4.7.2 runtime, replaying the extracted function body (200 000 rolls per
+cell, vanilla vs mod):
+
+| luck | vanilla | mod v4 |
+| --- | --- | --- |
+| 0 | 69.9 / 22.1 / 7.0 / **0.97 %** | 52.1 / 26.9 / 15.0 / **6.00 %** |
+| 10 | 58.1 / 30.8 / 9.8 / 1.33 % | 37.6 / 35.2 / 19.5 / **7.76 %** |
+| 20 | 46.0 / 39.6 / 12.6 / 1.83 % | 24.3 / 42.7 / 23.6 / **9.44 %** |
+| ≥ ~27 (ceiling) | 22.4 / 56.8 / 18.3 / 2.56 % | 16.9 / 46.8 / 26.1 / **10.24 %** |
+
+Your last run had LUK 131 ⇒ `eff_stat` = `_capped(base) + _capped(run)` with `MAX_STAT 10` and
+`OVERSTAT_EFF 0.5` ⇒ far past the shift ceiling, so expect the bottom row: roughly **1 legendary in 10
+offers** (was 1 in 40), epic+legendary ≈ 36 %.
+
+**Side effects to know about**
+
+1. A legendary offer also grants `all_stats: 1` = **+1 to every stat** (`player.gd:5329-5331`), so ~7 %
+   of ~500 picks ≈ +35-50 to all six stats per run instead of ~5. That is the game's own reward, not a
+   new mechanic — but it is the dominant power effect of this change. If it turns out too strong,
+   the honest knob is `MOD_CHOICE_W` (use e.g. `[60, 27, 10, 3]` for half the rate).
+2. `steps = 3` on a skill already at `MAX_SKILL_LEVEL 5` is wasted unless `grows_past_cap(id)`, so
+   maxed builds will see more dud cards. Fixable later by skipping tiers 2-3 for entries at cap.
+3. Scope is exactly the level-up-style flows: level-up, the Sage start box, reroll, banish replacement,
+   autopick, and (in co-op) the host's rolls. **Untouched:** gear drops (`LEGENDARY_CHANCE 0.0075`,
+   `ELITE_LEGENDARY_CHANCE 0.0008`, `HELL_LEGEND_EACH/_STEP`, `TOWER_FACE_LEGEND*`), gacha
+   (`GACHA.odds.legendary 0.01`, pity 12), star smith, tower blessings/wheel, Morroc toys.
+4. `ui/guide.gd:77` builds the help text from the shipped table, so the in-game guide will still quote
+   the vanilla odds.
+
+**New probe:** `user://mod_probe_choices.txt` (rewritten every 64 rolls) shows the measured
+distribution — `rolls=… Epica=… Legendaria=… P(legend)=x.x%` — so the rate is verifiable from your own
+run instead of from this table.
