@@ -1,6 +1,17 @@
 class_name Player
 extends Node3D
 
+# [MOD] Ceiling for "Mechanics" damage - the damage-report row that groups every pierce hit with no
+# enemy behind it (hell rain, meteors, heralds, shadow-MVP mechanics, storm, Niflheim fog, Marca del
+# Apocalipsis, corrupt burst, tower hazards). Those hits scale with OUR max HP and skip armour, VIT,
+# Guard at full rate and the "Aguanta" one-hit save, so at ~1M HP a meteor landed 514k (0.18 pct x 3.0
+# stillness stack). See work/60_patches/PATCH_SYSTEM.md §7/§11.
+const MOD_MECH_PCT_CAP: = 0.15
+# hits bigger than 4x max HP are the game's own executions (main.gd tour/debug kills use 1e9..1e12)
+const MOD_MECH_EXECUTE_OVER: = 4.0
+const MOD_TAG: = "mod-v2"
+static var mod_mech_probe: = false
+
 
 signal leveled_up
 signal died
@@ -3559,6 +3570,22 @@ func take_damage(amount: float, world: World, from: Enemy = null, pierce: = fals
 		amount = maxf(1.0, amount * (1.0 - damage_reduction()) * (1.0 - vit_cut))
 
 
+	# [MOD] apply the ceiling after all mitigation, before shields absorb, so the number the meter and
+	# the run log show is the one that can actually kill.
+	if pierce and from == null and amount < max_hp * MOD_MECH_EXECUTE_OVER:
+		var ceiling: = max_hp * MOD_MECH_PCT_CAP
+		if amount > ceiling:
+			if not mod_mech_probe:
+				mod_mech_probe = true
+				print("MODPROBE %s capped mechanics hit %.0f -> %.0f of max_hp %.0f (%.2f -> %.2f) by %s" % [
+					MOD_TAG, amount, ceiling, max_hp, amount / max_hp, MOD_MECH_PCT_CAP, what])
+				var mf: = FileAccess.open("user://mod_probe_player.txt", FileAccess.WRITE)
+				if mf != null:
+					mf.store_string("%s first capped hit\nlabel=%s\nhit=%.0f -> %.0f\nmax_hp=%.0f (%.2f -> %.2f of it)\npid=%d\nat=%s\n" % [
+						MOD_TAG, what, amount, ceiling, max_hp, amount / max_hp, MOD_MECH_PCT_CAP, OS.get_process_id(), 
+						Time.get_datetime_string_from_system()])
+					mf.close()
+			amount = ceiling
 	if not touch and not hazard and effects.has("hit_shield") and world.clock >= _gryphon_at:
 
 		_gryphon_at = world.clock + GameData.GRYPHON_GUARD_CD

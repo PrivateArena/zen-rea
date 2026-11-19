@@ -13,6 +13,9 @@ const DODGE_HEAL: = 0.02
 const MOD_TRAP_PCT_CAP: = 0.1
 const MOD_TRAP_EVERY_MIN: = 4.0
 const MOD_TRAP_MAX: = 2
+# [MOD] this file is not a member of patch_0.2.3.pck at all (it ships in the 0.2.0 bridge), so its
+# presence in the top pack is the thing worth proving: the probe reports the clamped pct it will use.
+static var mod_traps_probe: = false
 
 var world: World
 var _t: = 4.0
@@ -55,6 +58,14 @@ func tick(delta: float, at_floor: int) -> void :
 	if past > 0:
 		pct = minf(GameData.TOWER_PAST_TRAP_PCT_MAX, pct + past * GameData.TOWER_PAST_TRAP_PCT_STEP)
 	pct = minf(MOD_TRAP_PCT_CAP, pct)
+	if not mod_traps_probe:
+		mod_traps_probe = true
+		print("MODPROBE tower_traps.gd mounted: floor=%d pct clamped to %.2f (stock cap 0.30), every>=%.1fs, max %d at once, pid=%d" % [
+			at_floor, pct, MOD_TRAP_EVERY_MIN, MOD_TRAP_MAX, OS.get_process_id()])
+		var mf: = FileAccess.open("user://mod_probe_traps.txt", FileAccess.WRITE)
+		if mf != null:
+			mf.store_string("floor=%d\npct=%.3f\npid=%d\nat=%s\n" % [at_floor, pct, OS.get_process_id(), Time.get_datetime_string_from_system()])
+			mf.close()
 	var cast: = maxf(0.9, 1.35 - up * 0.004)
 	var many: = mini(MOD_TRAP_MAX, 1 + int(at_floor >= GameData.TOWER_PAST_DOUBLE) + int(at_floor >= GameData.TOWER_PAST_TRIPLE))
 

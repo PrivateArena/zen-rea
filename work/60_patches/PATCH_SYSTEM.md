@@ -261,8 +261,8 @@ paths in `updater.gd` discard the mod, they never merge with it:
 | download/manifest unreachable | `_on_manifest()` returns early | **mod stays**: packs on disk are never re-hashed, so we keep playing our build |
 
 So the question is not *whether* we have to re-apply, but how cheaply. The mod is only a 142-line
-diff (`mod-v1.patch`, regenerate after any change with
-`git diff v0.2.3-decompiled -- effective_0.2.3 > mod-vN.patch`), and a diff can be **3-way merged**
+diff (`mod-latest.patch`, regenerate after any change with
+`git diff v0.2.3-decompiled -- effective_0.2.3 > mod-latest.patch`), and a diff can be **3-way merged**
 onto the next decompile. Measured on this host with GNU patch 2.8.1 against a tree where a developer
 had renamed `TOWER_TRAP_PCT_MAX` and inserted a line inside our target function:
 
@@ -281,7 +281,7 @@ Runbook after an update:
 ```sh
 # 1. assemble the new tree (PATCH_SYSTEM.md §5, ~3 min): effective_0.2.4/
 # 2. merge the mod into it
-cd work/60_patches/effective_0.2.4 && patch -p4 --merge < ../mod-v1.patch   # -p4 -> paths relative to this dir
+cd work/60_patches/effective_0.2.4 && patch -p4 --merge < ../mod-latest.patch   # -p4 -> paths relative to this dir
 grep -rn '^<<<<<<<' scripts/                                               # resolve any conflict by hand
 # 3. rebuild + install (BASE_TAG must point at the new pristine baseline commit)
 cd .. && BASE_TAG=v0.2.4-decompiled ./build.sh --install
@@ -311,3 +311,78 @@ Two traps on the next update, both cheap to check:
 * **`state.json` `version` vs the manifest.** While the manifest keeps offering 0.2.3, nothing is ever
   re-downloaded (`_newer()` is false), so an installed mod is stable. Only a genuinely newer version
   triggers the paths in the table above.
+
+## 11. Mod v2 — adventure/hell "Mechanics" cap + in-game proof (installed 2026-11-19)
+
+Evidence from a real adventure run (Thor Volcano, Hell 14, Hard, Frenzy, 40:00, Lv 519, ~1 M HP):
+damage **taken** 11.4 M of which **"Mechanics" 7.1 M (62 %)**, `Hits 54`, `Max hit 514k`, `Average 131k`.
+
+**Why "Mechanics" is a category at all** — `World.meter_take()` (`core/main.gd:7123`):
+
+```gd
+	var key: = "mechanics" if pierce else "shots"
+	if from != null and is_instance_valid(from):
+		key = from.id if not pierce else "mechanics:" + from.id
+```
+
+so the plain *Mecánicas* row = **every `take_damage(…, from = null, pierce = true)`** (`taken_label()`
+`core/main.gd:7267`). The `hazard` flag is irrelevant to the category, it only changes in-hit math.
+Ten such sites exist; only three of them pass through `Player.hell_hazard()`, so a cap there is not
+enough — the choke point has to be `Player.take_damage()` itself:
+
+| pct (share of *our* max HP) | source | route |
+| --- | --- | --- |
+| 0.15 hell rain (`HELL_RAIN_PCT`, every 9 s × `hell_pace()`) | `main.gd:15365` | `hell_hazard` |
+| 0.18 wandering meteors (`HELL_METEOR_PCT`, every 14 s) | `main.gd:15321` | `hell_hazard` |
+| 0.12 Surtr heralds (`HELL_HERALD_PCT`, 3 s each) | `main.gd:15205` | `hell_hazard` |
+| 0.08 revenge of the fallen (`HELL_REVENGE_PCT`) | `main.gd:11435` | `hell_hazard` |
+| 0.1 × ability dmg ⇒ 0.14-0.18 shadow-MVP mechanics (`HELL_SHADOW_PCT`, Ifrit 1.8/1.5/1.5/1.4) | `hell_late.gd:318` | `hell_hazard` |
+| 0.08 storm bolts (`STORM_PCT`, 3 bolts / 12 s) | `main.gd:15409` | **direct** |
+| ≤0.12 Niflheim fog, **1 Hz** (`HELL_FOG_PCT + RAMP·t` capped by `_MAX`) | `hell_late.gd:477` | **direct** |
+| 0.025 pool / **0.30** burst (`MARK_POOL_PCT`, `MARK_PCT`) | `hell_late.gd:1371`, `:1459` | **direct** |
+| 0.06 corrupt burst (`KARMA_ROUTES.dark.foe_burst`) | `karma.gd:287` | **direct** |
+| tower hazards | `tower_traps.gd` | already capped by mod v1 leaves |
+
+**Their 514 k is exactly the vanilla worst case:** highest `pct` available at Hell 14 is 0.18 (meteor,
+or shadow `0.1 × 1.8`), times the stillness stack `1 + HELL_STILL_STEP 0.5 × HELL_STILL_MAX 4 = 3.0`
+⇒ **0.54 × 1 M ≈ 540 k**; average 131 k ⇒ typical 0.08-0.18 with a 0-1 stack. No adventure hazard
+ramps `pct` with time — only cadence (`hell_pace()`) and the stack. And `plain` at `player.gd:3600`
+excludes pierce hits from the "¡Aguanta!" save, so nothing absorbs it: two stacked hits = death.
+Worse, `player.gd:3466` multiplies hazard damage by `1 + HEL_PACT_TAKEN 0.2 × karma boons` (unbounded),
+which alone can push a hit past 100 % of max HP.
+
+**Fix (4th file: `core/player.gd`).** Ceiling applied after every mitigation and before shields absorb,
+keyed on the same predicate the report uses, so it covers all ten sites and any future one:
+
+```gd
+	if pierce and from == null and amount < max_hp * MOD_MECH_EXECUTE_OVER:   # 4x: tour/debug executes use 1e9..1e12
+		var ceiling: = max_hp * MOD_MECH_PCT_CAP                            # 0.15 -> 54% becomes 15%
+		if amount > ceiling: amount = ceiling
+```
+
+`MOD_MECH_PCT_CAP = 0.15`, `MOD_MECH_EXECUTE_OVER = 4.0`. Consequences: worst hazard 0.54 → **0.15**
+of max HP, so 4 clear hits are needed; `hel_pact` boons still multiply but the ceiling is applied after
+mitigation, so a boon-scaled hit is capped too; the game's own debug/tour executions (1e9..1e12) are
+untouched; ordinary enemy contact/projectiles (`from != null`) and mob specials are unaffected.
+Not changed on purpose: the "¡Aguanta!" save stays excluded for hazards (that is a design decision,
+available as an option if 15 % still feels unfair in bursts).
+
+**Runtime proof that the mod is what is running.** Each patched script now reports itself once from
+inside the game — `print()` reaches `user://logs/godot.log` (file logging is on by default; the game's
+own `HITCH`/`LOAD` lines prove it) and a small file lands in the user dir:
+
+| file | written when |
+| --- | --- |
+| `user://mod_probe_enemy.txt` | first monster spawn (any mode, seconds after a run starts) — tag + all 4 cap values |
+| `user://mod_probe_player.txt` | first mechanics hit that got capped — label, hit before/after, max HP, share |
+| `user://mod_probe_traps.txt` | first tower hazard (floor ≥ 5) — floor + clamped pct, proves the added member beats the bridge |
+
+`./play.sh --probe` prints them and compares their timestamps with the installed pack, so
+"did the new build actually load?" is a yes/no answer instead of a guess.
+
+**Process lesson, kept as a gate.** The `player.gd` patch was first written with a match string that
+covered only `extends Node` of `extends Node3D`, leaving `false3D` behind and silently changing the base
+class. GDRE's `--compile` did **not** reject it (no project context = no full analysis); the round-trip
+decompile exposed it. `build.sh` now refuses to build unless every source line that disappears is either
+re-added verbatim or listed in `lint-allow.txt` (the three lines the mod genuinely rewrites), and
+`--deep` decompiles the built `.gdc` and lists source lines it cannot show back.

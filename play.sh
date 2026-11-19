@@ -16,6 +16,7 @@
 #   ./play.sh                          launch official build, patches mounted, your real profile
 #   ./play.sh --status                 what is installed, which version, modded? (no launch)
 #   ./play.sh --test                   --status + sha256 of the base pack too (no launch)
+#   ./play.sh --probe                  proof the modded scripts really ran (user://mod_probe_*.txt)
 #   ./play.sh --layer game_data.gdc    which pack owns a res:// member (layer shadow audit)
 #   ./play.sh --dir DIR                launch a staged game dir instead of the retail one
 #   ./play.sh --isolate              sandbox user:// into work/70_play_userdata (fresh saves,
@@ -34,6 +35,7 @@ MOD_PACK="$WORK/60_patches/out/patch_0.2.3.pck"   # output of the mod build step
 APP="Midgard Survivors"
 PATCHES="${XDG_DATA_HOME:-$HOME/.local/share}/godot/app_userdata/$APP/patches"
 STATE="$PATCHES/state.json"
+LIVE="$PATCHES/patch_0.2.3.pck"
 
 # sha256 of the pristine developer packs (captured 2026-11-19; patches2/ holds a byte-identical
 # backup of the two patch packs, work/logs/verify.baseline.json holds the base one).
@@ -46,6 +48,7 @@ ENGINE_ARGS=() USER_ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     -s|--status)  MODE=status; shift ;;
+    -p|--probe)   MODE=probe; shift ;;
     -t|--test)    MODE=status; VERIFY=1; shift ;;
     -l|--layer)   MODE=layer; LAYER="${2:?--layer needs a path fragment}"; shift 2 ;;
     -d|--dir)     DIR="${2:?--dir needs a path}"; shift 2 ;;
@@ -53,7 +56,7 @@ while [ $# -gt 0 ]; do
     -n|--dry-run) DRY=1; shift ;;
     --godot)      shift; [ $# -gt 0 ] && { ENGINE_ARGS+=("$1"); shift; } ;;
     --user)       shift; [ $# -gt 0 ] && { USER_ARGS+=("$1"); shift; } ;;
-    -h|--help)    sed -n '3,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)    sed -n '3,27p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "play.sh: unknown option '$1' (try --help)" >&2; exit 2 ;;
   esac
 done
@@ -116,6 +119,50 @@ do_status() {
     hr; echo "  built mod pack ready: ${MOD_PACK#$WORK/}"
     echo "                  it is NOT mounted by itself: the game only reads $PATCHES"
   fi
+  probe_summary
+}
+
+# --- runtime proof that the MODDED scripts really executed -----------------------------------
+# Modded scripts write user://mod_probe_<name>.txt on the first relevant event (Enemy.setup spawns,
+# first mechanics hit, first tower hazard) and print MODPROBE lines, which Godot also tees into
+# user://logs/godot.log. Comparing their timestamps with the pack tells you whether a NEW build ran.
+do_probe() {
+  local u="${XDG_DATA_HOME:-$HOME/.local/share}/godot/app_userdata/$APP" f newest=0 stamp
+  hr; echo "  probe files (written by the modded scripts from inside the game):"
+  for f in "$u"/mod_probe_*.txt; do
+    [ -e "$f" ] || continue
+    stamp=$(date -r "$f" '+%Y-%m-%d %H:%M:%S')
+    [ "$(stat -c %Y "$f")" -gt "$newest" ] && newest=$(stat -c %Y "$f")
+    printf '  %s   at %s\n' "${f##*/}" "$stamp"
+    sed 's/^/      /' "$f"
+  done
+  if [ -n "$(ls -A "$u"/logs 2>/dev/null)" ]; then
+    grep -h MODPROBE "$u"/logs/*.log 2>/dev/null | tail -6 | sed 's/^/  log:  /'
+  fi
+  hr
+  if [ "$newest" = 0 ]; then
+    echo "  NO probe yet: the modded scripts have never run. Start the game with ./play.sh (no args)."
+  else
+    echo "  last mod activity: $(date -d "@$newest" '+%Y-%m-%d %H:%M:%S')"
+    local newest_pack=0 p
+    for p in "$PATCHES"/*.pck; do [ -e "$p" ] && [ "$(stat -c %Y "$p")" -gt "$newest_pack" ] && newest_pack=$(stat -c %Y "$p"); done
+    if [ "$newest_pack" -gt "$newest" ]; then
+      echo "  WARNING: the installed pack is NEWER than the last probe -> launch once to load the new build."
+    else
+      echo "  OK: the installed pack is older than the last probe, so what is installed is what is running."
+    fi
+  fi
+}
+
+probe_summary() {
+  local u="${XDG_DATA_HOME:-$HOME/.local/share}/godot/app_userdata/$APP" f n=0
+  for f in "$u"/mod_probe_*.txt; do [ -e "$f" ] && n=$((n + 1)); done
+  hr
+  if [ "$n" = 0 ]; then
+    echo "  runtime proof: no mod probe file yet (the game has not run the modded scripts)"
+  else
+    echo "  runtime proof: $n probe file(s) in the user dir -> run ./play.sh --probe"
+  fi
 }
 
 # --- run ------------------------------------------------------------------------------------
@@ -158,5 +205,6 @@ do_launch() {
 case "$MODE" in
   layer)  do_layer ;;
   status) do_status ;;
+  probe)  do_probe ;;
   launch) do_launch ;;
 esac
