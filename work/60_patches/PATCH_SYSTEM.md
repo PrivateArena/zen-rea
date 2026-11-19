@@ -247,3 +247,56 @@ other member survived. Verification evidence for v1: `members 123 -> 124` (the a
 `res://scripts/core/tower_traps.gdc`, which no layer shipped in this pack), 3/3 replaced members
 sha256-match `build/*.gdc`, all 120 other members present, and `decompile(compile(source))` differs
 from the source only by stripped comments — i.e. the shipped bytecode carries exactly our edit.
+
+## 10. What happens when the developer ships an update
+
+Nothing of ours survives an official update by design — and nothing breaks either. All three code
+paths in `updater.gd` discard the mod, they never merge with it:
+
+| Situation | Code | Effect on the installed mod |
+| --- | --- | --- |
+| new incremental patch (0.2.4) | `_on_patch()` → writes `patch_0.2.4.pck`, rewrites `state.json`, then `DirAccess.remove_absolute(DIR.path_join(old))` | our `patch_0.2.3.pck` **is deleted**, and the new pack replaces the files we edited → mod gone |
+| new base build (`manifest.base` ≠ our `_eff_base`) with a `legacy[0.1.273]` entry | `_adopt_bridge()` / `_download(..., as_bridge = true)` | bridge replaced, old packs deleted → mod gone |
+| new base build, no legacy bridge | `_show_new_build()` → itch.io download | new executable + new `MidgardSurvivors.pck`; on first run `state.base != _base` → `_clear_patches()` **wipes the whole `patches/` folder** → mod gone |
+| download/manifest unreachable | `_on_manifest()` returns early | **mod stays**: packs on disk are never re-hashed, so we keep playing our build |
+
+So the question is not *whether* we have to re-apply, but how cheaply. The mod is only a 142-line
+diff (`mod-v1.patch`, regenerate after any change with
+`git diff v0.2.3-decompiled -- effective_0.2.3 > mod-vN.patch`), and a diff can be **3-way merged**
+onto the next decompile. Measured on this host with GNU patch 2.8.1 against a tree where a developer
+had renamed `TOWER_TRAP_PCT_MAX` and inserted a line inside our target function:
+
+```
+patching file scripts/core/enemy.gd                       <- clean
+patching file scripts/core/tower_run.gd                   <- clean
+patching file scripts/core/tower_traps.gd
+Hunk #3 NOT MERGED at 57-61, merged at 63                 <- conflict, exit code 1, <<<<<<< markers
+```
+
+i.e. silent where the code still matches, **loud** where it does not — never a half-silent build,
+because `build.sh` compiles whatever is in the tree and its member-hash step reports every file.
+
+Runbook after an update:
+
+```sh
+# 1. assemble the new tree (PATCH_SYSTEM.md §5, ~3 min): effective_0.2.4/
+# 2. merge the mod into it
+cd work/60_patches/effective_0.2.4 && patch -p4 --merge < ../mod-v1.patch   # -p4 -> paths relative to this dir
+grep -rn '^<<<<<<<' scripts/                                               # resolve any conflict by hand
+# 3. rebuild + install (BASE_TAG must point at the new pristine baseline commit)
+cd .. && BASE_TAG=v0.2.4-decompiled ./build.sh --install
+./play.sh --status                                                         # -> MODIFIED + new sha
+```
+
+Prefer `git apply -3` (default `-p 1`) when the new tree lives at the same path inside this repo —
+then the pristine blobs from the baseline tag are the merge base.
+
+**Making the mod survive the update itself** (optional, not currently done): the updater mounts only
+`state.bridge` + `state.file`, so a third pack can only be mounted by editing `updater.gd` — which
+lives in the *base* pack, so it costs a writable copy of the game directory (~634 MB, hardlinkable
+except the pack) plus one `--pck-patch` of the 557 MB pack. `mod.pck` must then sit **outside**
+`user://patches`, because `_clear_patches()` deletes every file in that folder; `user://mod/mod.pck`
+is never touched. That buys "our layer is still mounted after their update", **not** "our layer is
+still correct": our members replace whole scripts, so an old mod would *undo* their changes to those
+three files until re-merged. The merge step is unavoidable either way, which is why the tracked-diff
+workflow above is the primary mechanism and the custom `updater.gd` is only a convenience.
