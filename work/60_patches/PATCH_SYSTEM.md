@@ -300,3 +300,14 @@ is never touched. That buys "our layer is still mounted after their update", **n
 still correct": our members replace whole scripts, so an old mod would *undo* their changes to those
 three files until re-merged. The merge step is unavoidable either way, which is why the tracked-diff
 workflow above is the primary mechanism and the custom `updater.gd` is only a convenience.
+
+Two traps on the next update, both cheap to check:
+
+* **Bytecode revision.** Our scripts are compiled for revision 101 (`--bytecode=4.5.0-stable`). If a
+  future build bumps the export template, the packs' `.gdc` headers change and GDRE will need a new
+  token. Read it straight off the new pack before compiling:
+  `head -c 8 <extracted>.gdc | od -An -tu1` (bytes 5-8, little-endian) and pick the token from
+  `gdre_tools --list-bytecode-versions`; `build.sh` takes it as `BYTECODE=<token> ./build.sh`.
+* **`state.json` `version` vs the manifest.** While the manifest keeps offering 0.2.3, nothing is ever
+  re-downloaded (`_newer()` is false), so an installed mod is stable. Only a genuinely newer version
+  triggers the paths in the table above.
