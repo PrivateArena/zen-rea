@@ -1,0 +1,44 @@
+# This repo tracks ONLY the readable/hand-written layer of the RE project: notes, tools, and
+# decompiled GDScript. Everything heavy or regenerable (recovered assets, packs, build output, raw
+# extractions, evidence JSON, logs) lives under work/ and stays untracked on purpose, so the repo
+# stays small enough for GitHub. Regenerate the big trees with the commands in work/README.md.
+#
+# Pattern order matters: default-deny at the top, then explicit re-inclusions.
+
+/*
+!/.gitignore
+!/AGENTS.md
+!/ARCHITECTURE_PLAN_portable-rea-re-env.md
+!/gemini_rea_conv.json_2026-11-17.md
+!/play.sh
+
+!/work/
+/work/*
+!/work/README.md
+
+!/work/50_roundtrip/
+/work/50_roundtrip/*
+!/work/50_roundtrip/REPORT.md
+
+!/work/60_patches/
+/work/60_patches/*
+!/work/60_patches/PATCH_SYSTEM.md
+!/work/60_patches/effective_0.2.3/
+!/work/60_patches/mod/
+
+# never track these, wherever they appear
+*.gdc
+*.gdc.uid
+*.gd.uid
+*.pck
+*.exe
+*.dll
+*.so
+*.tmp
+*.zip
+.godot/
+godot*/
+__pycache__/
+export_credentials.cfg
+eos/credentials.cfg
+gdre_export.log
