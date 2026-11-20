@@ -96,6 +96,14 @@ git diff --stat v0.2.4-decompiled -- work/60_patches/effective_0.2.4   # = the m
 
 ## Log
 
+**2026-11-20 (latest)** — **mod v8** (pack `41fa493c…`): Star Potential. `MOD_CRUMB_MULT 2.5` at the single
+crumb roll site (`main.gd:11685`, MVP/Hel/hell scale together, Hell-10 gate kept) and the tier odds
+`MOD_POT_UP [0.30,0.18]` / `MOD_POT_SAME 0.7` / `MOD_POT_PERFECT 0.3` in `Potential.roll`
+(`core/potential.gd:124`). Measured with the real `roll()` under Godot: rerolls Raro→Legendario
+35.7 → 10.1, 3-of-3 legendary lines 4.2 % → 47.9 %, so a 3-lock grind costs ~101 crumbs instead of ~357
+under the **shipped** prices (1/4/7/10 per roll) — reroll *prices* deliberately left alone (maintenance;
+v7 had changed them, reverted). Mod is now 7 files, +214/−10, 10 replaced shipped lines in `lint-allow.txt`.
+
 **2026-11-20 (latest)** — **Official update 0.2.3 → 0.2.4 handled; mod reinstalled as v6**
 (pack `bfc81d3a…`, 168 members). The updater deleted our modded `patch_0.2.3.pck` *and* wiped
 `patches2/`, so pristine packs now live only in `work/60_patches/orig/`. Decompiled the new layer
