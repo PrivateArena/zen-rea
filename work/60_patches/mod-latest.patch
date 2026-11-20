@@ -27,7 +27,7 @@ index 9a6d866..0d4c010 100644
  
  
 diff --git a/work/60_patches/effective_0.2.4/scripts/core/enemy.gd b/work/60_patches/effective_0.2.4/scripts/core/enemy.gd
-index bec9cad..9760525 100644
+index bec9cad..afd0d24 100644
 --- a/work/60_patches/effective_0.2.4/scripts/core/enemy.gd
 +++ b/work/60_patches/effective_0.2.4/scripts/core/enemy.gd
 @@ -207,6 +207,15 @@ func _init() -> void :
@@ -39,7 +39,7 @@ index bec9cad..9760525 100644
 +const MOD_TIME_SCALE_CAP: = 3.0
 +# [MOD] one-shot proof that this (patch-layer) script is the one the running process loaded.
 +# Enemy.setup() fires on every spawn in every mode, so the probe lands within seconds of a run start.
-+const MOD_TAG: = "mod-v9 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 pot_up=[30,18] pot_same=0.70 refine=x2 grade=[1,1.15,1.5,2,2.6]"
++const MOD_TAG: = "mod-v10 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6]"
 +static var mod_probe_done: = false
 +static var mod_probe_spawns: = 0
 +static var mod_clock_capped: = 0
@@ -132,7 +132,7 @@ index 9388504..26feacd 100644
  		number(e.position + Vector3(0, 2.2, 0), tr("¡Star Crumb!"), GameData.POTENTIAL_TIERS[2].color, true)
  		Vfx.column(fx_root, e.position, Color(0.85, 0.8, 1.0))
 diff --git a/work/60_patches/effective_0.2.4/scripts/core/player.gd b/work/60_patches/effective_0.2.4/scripts/core/player.gd
-index 79ddf68..9e82b24 100644
+index 79ddf68..77c9e8f 100644
 --- a/work/60_patches/effective_0.2.4/scripts/core/player.gd
 +++ b/work/60_patches/effective_0.2.4/scripts/core/player.gd
 @@ -1,6 +1,33 @@
@@ -164,7 +164,7 @@ index 79ddf68..9e82b24 100644
 +# the Lv 443 / 40-minute mark (35.3M -> 53.0M XP), not +50%. It also raises Class Lv, because Class
 +# EXP is roundi(xp_gained), which this feeds. See PATCH_SYSTEM.md §14.
 +const MOD_XP_MULT: = 1.5
-+const MOD_TAG: = "mod-v9 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 pot_up=[30,18] pot_same=0.70 refine=x2 grade=[1,1.15,1.5,2,2.6]"
++const MOD_TAG: = "mod-v10 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6]"
 +
  
  signal leveled_up
@@ -240,10 +240,10 @@ index 79ddf68..9e82b24 100644
  	o["level"] = cur + steps
  
 diff --git a/work/60_patches/effective_0.2.4/scripts/core/potential.gd b/work/60_patches/effective_0.2.4/scripts/core/potential.gd
-index bfe6737..760e97a 100644
+index bfe6737..00db96a 100644
 --- a/work/60_patches/effective_0.2.4/scripts/core/potential.gd
 +++ b/work/60_patches/effective_0.2.4/scripts/core/potential.gd
-@@ -10,6 +10,18 @@ extends RefCounted
+@@ -10,6 +10,37 @@ extends RefCounted
  
  const LINES: = 3
  
@@ -255,14 +255,33 @@ index bfe6737..760e97a 100644
 +# price per reroll is still 1 / 4 / 7 / 10 crumbs: locking stays exactly as the developers priced it, and
 +# the only reason a full grind is cheaper now is that it takes fewer rolls.
 +const MOD_POT_UP: = [0.3, 0.18]
-+const MOD_POT_SAME: = 0.7
-+const MOD_POT_PERFECT: = 0.3
++const MOD_POT_SAME: = 0.85
++const MOD_POT_PERFECT: = 0.8
++# [MOD] Weighted line choice. The shipped pick is uniform over the 18 kinds in POTENTIAL_LINES, so the
++# perfect legendary "stats" line (+7% a todos los atributos; semi is +5%, value() takes vals[3] when the
++# line is top tier AND perfect) is 1/18 per line - three of them on one item is (1/18)^3 = 1/5832 rolls,
++# which is why a full +7 set is effectively unreachable. Weighting stats at 12 makes it 12/29 = 41% of
++# the 18 kinds, and with MOD_POT_PERFECT 0.8 a line lands as the +7% kind 33% of the time (shipped:
++# 1/18 x 0.2 = 1.1%). Every other kind keeps weight 1.0, so dmg / proc / boss hunting stays at shipped odds.
++const MOD_POT_KEY_W: = {"stats": 12.0}
 +static var mod_pot_rolls: = 0
++
++
++static func _pot_key(keys: Array) -> String:
++	var total: = 0.0
++	for k in keys:
++		total += float(MOD_POT_KEY_W.get(str(k), 1.0))
++	var r: = randf() * total
++	for k in keys:
++		r -= float(MOD_POT_KEY_W.get(str(k), 1.0))
++		if r <= 0.0:
++			return str(k)
++	return str(keys[0])
 +
  
  static func has(it) -> bool:
  	return it is Dictionary and (it as Dictionary).get("pot") is Dictionary and not (it.pot.get("lines", []) as Array).is_empty()
-@@ -130,7 +142,7 @@ static func roll(it: Dictionary, locked: Array) -> bool:
+@@ -130,7 +161,7 @@ static func roll(it: Dictionary, locked: Array) -> bool:
  	var up: = false
  	if t == 0:
  		t = 1
@@ -271,13 +290,14 @@ index bfe6737..760e97a 100644
  		t += 1
  		up = true
  	var keys: Array = GameData.POTENTIAL_LINES.keys()
-@@ -139,11 +151,11 @@ static func roll(it: Dictionary, locked: Array) -> bool:
+@@ -139,11 +170,11 @@ static func roll(it: Dictionary, locked: Array) -> bool:
  		if locked.has(i) and i < old.size():
  			out.append((old[i] as Dictionary).duplicate())
  			continue
 -		var lt: = t if i == 0 or randf() < GameData.POTENTIAL_SAME else maxi(1, t - 1)
+-		var line: = {"k": str(keys.pick_random()), "t": lt}
 +		var lt: = t if i == 0 or randf() < MOD_POT_SAME else maxi(1, t - 1)
- 		var line: = {"k": str(keys.pick_random()), "t": lt}
++		var line: = {"k": _pot_key(keys), "t": lt}
  
  		if lt >= GameData.POTENTIAL_TIERS.size():
 -			line["p"] = randf() < GameData.POTENTIAL_PERFECT
@@ -285,7 +305,7 @@ index bfe6737..760e97a 100644
  		out.append(line)
  	it["pot"] = {"tier": t, "lines": out}
  
-@@ -155,6 +167,24 @@ static func roll(it: Dictionary, locked: Array) -> bool:
+@@ -155,6 +186,31 @@ static func roll(it: Dictionary, locked: Array) -> bool:
  			Save.bump("pot_legend")
  			if bool(out[i].get("p", false)):
  				Save.bump("pot_perfect")
@@ -295,13 +315,20 @@ index bfe6737..760e97a 100644
 +	if mod_pot_rolls % 8 == 1:
 +		var leg: = 0
 +		var perf: = 0
++		var stats: = 0
++		var perfect_stats: = 0
 +		for l in out:
 +			if int((l as Dictionary).get("t", 0)) >= GameData.POTENTIAL_TIERS.size():
 +				leg += 1
 +				if bool((l as Dictionary).get("p", false)):
 +					perf += 1
-+		var s: = "rolls=%d  tier=%d  legendary_lines=%d/3  perfect=%d  (up=%s same=%.2f perfect_p=%.2f)" % [
-+			mod_pot_rolls, t, leg, perf, str(MOD_POT_UP), MOD_POT_SAME, MOD_POT_PERFECT]
++			if str((l as Dictionary).get("k", "")) == "stats":
++				stats += 1
++				if int((l as Dictionary).get("t", 0)) >= GameData.POTENTIAL_TIERS.size() and bool((l as Dictionary).get("p", false)):
++					perfect_stats += 1
++		var s: = "rolls=%d  tier=%d  legendary_lines=%d/3  perfect=%d  stats_lines=%d/3  perfect_stats=%d  (up=%s same=%.2f perfect_p=%.2f stats_w=%.1f)" % [
++			mod_pot_rolls, t, leg, perf, stats, perfect_stats, str(MOD_POT_UP), MOD_POT_SAME, MOD_POT_PERFECT,
++			float(MOD_POT_KEY_W.get("stats", 1.0))]
 +		print("MODPROBE potential: ", s)
 +		var f: = FileAccess.open("user://mod_probe_potential.txt", FileAccess.WRITE)
 +		if f != null:

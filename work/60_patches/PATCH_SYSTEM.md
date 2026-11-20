@@ -618,3 +618,33 @@ mod parameters through the same code (30 000 grade rolls per tier, 3 000 random 
 
 The `w4`/`armor` gain is deliberately large: the walk-with-`-1` cost is exponentially sensitive to the last
 steps, and 9 % was where the mechanic stopped being fun.
+
+## 17. Mod v10 — the +7 % all-stats line (installed, pack sha `24b725993bc28142…`)
+
+What "a perfect roll" actually is: each of the 3 lines is `{key, tier, perfect}`. `POTENTIAL_LINES`
+(`game_data.gd:5755`) holds **18 kinds**, picked by `keys.pick_random()` — and only one of them, `stats`,
+is "+N% a todos los atributos", with `vals: [0.02, 0.04, 0.05, 0.07]`. `Potential.value()` (`potential.gd:75`)
+takes `vals[tier-1]` and steps one further **only when the line is top tier AND `p` is set**, so +5 % =
+legendary-semi and **+7 % = legendary-perfect**, which is also the only difference between the two. So the
+"perfect +7 all stats" outcome is three independent gates: item tier 3, the *kind* being `stats` (1/18),
+and `POTENTIAL_PERFECT` (0.2). Combined at top tier: 0.53 % per line, and (1/18)³ ≈ 1/5832 for one roll with
+all three — a full set is effectively unreachable, exactly the complaint.
+
+Changes in `core/potential.gd`: `MOD_POT_PERFECT 0.8` (was 0.2; still only rolled on a top-tier line, and
+Hel Tears keep converting the remaining semi ones), `MOD_POT_SAME 0.85` (was 0.2 → v7 0.7), and
+`MOD_POT_KEY_W = {"stats": 12.0}` consumed by the inserted weighted picker `_pot_key()` (1 rewritten line:
+`keys.pick_random()` → `_pot_key(keys)`). Every other kind keeps weight 1.0, so damage/proc/boss hunting is
+untouched. The +7 value itself is the shipped `vals[3]` — no new numbers, only the gates are widened.
+
+Measured running the real `roll()` under Godot 4.7.2 at Legendario tier (60 000 rolls; 1 500 sessions of the
+way it is actually played, i.e. lock a line the moment it comes out +7 %):
+
+| | vanilla | mod v10 |
+| --- | --- | --- |
+| P(one line = perfect +7 % all stats) | 0.53 % | **29.7 %** |
+| P(all 3 lines of a single roll) | never in 60 000 (≤0.002 %) | 2.68 % (≈1 in 37) |
+| rolls for a 3-line +7 % set, locking each hit | mean **677** (median 552, p90 1351) | mean **5.8** (median 5, p90 10) |
+
+Add the ~10 rolls it now takes to reach Legendario tier (§15) and a full set costs a few dozen crumbs
+instead of several thousand — with `MOD_CRUMB_MULT 2.5` on drops, roughly one Hell-15 run of farming.
+Probe extended: `user://mod_probe_potential.txt` now prints `stats_lines=n/3  perfect_stats=n  (… stats_w=12)`.

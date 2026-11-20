@@ -28,3 +28,5 @@ const MOD_TAG: = "mod-v7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_
 	return float(table[clampi(int(it.refine), 0, table.size() - 1)])
 const MOD_TAG: = "mod-v8 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 pot_up=[30,18] pot_same=0.70"
 const MOD_TAG: = "mod-v9 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 pot_up=[30,18] pot_same=0.70 refine=x2 grade=[1,1.15,1.5,2,2.6]"
+		var line: = {"k": str(keys.pick_random()), "t": lt}
+const MOD_TAG: = "mod-v10 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6]"
