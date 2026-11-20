@@ -540,40 +540,39 @@ XP analysis (why the other player's 401 @ 28:45 looked "faster" than 443 @ 40:00
 | **1.50** | 53.0M | **~499** | **+56** |
 | 2.00 | 70.7M | ~545 | +102 |
 
-## 15. Mod v7 — Star Potential (installed, pack sha `92a35934241a0fb2…`)
+## 15. Mod v8 — Star Potential (installed, pack sha see `./play.sh --status`)
 
-Two separate systems, both rolled in one line each:
+Two independent systems. **(a) Star Crumb drops** — one roll site, `core/main.gd:11685`
+`randf() < star_crumb_chance(e) * drop`, fed by `star_crumb_chance()` (`main.gd:265`): MVPs
+`STAR_CRUMB_MVP 0.035`, Hel tower its own curve, otherwise `STAR_CRUMB_HELL 7.5e-5 +
+STAR_CRUMB_HELL_STEP 4e-5·(hell−10) + STAR_CRUMB_OATH_STEP 1.5e-5·oath points`, and **0 below Hell 10**
+(also 0 in festival mode). `MOD_CRUMB_MULT = 2.5` inserted at that single site, so MVP / Hel / hell ladder
+scale together (Hell 15 without oaths 0.0275 % → 0.069 % per kill, MVP 3.5 % → 8.75 %) and the Hell-10
+gate, which is the developers' farm control, is untouched.
 
-**(a) Star Crumb drops** — one roll site, `core/main.gd:11685` `randf() < star_crumb_chance(e) * drop`,
-fed by `star_crumb_chance()` (`main.gd:265`): MVPs `STAR_CRUMB_MVP 0.035`, Hel tower its own curve,
-otherwise `STAR_CRUMB_HELL 7.5e-5 + STAR_CRUMB_HELL_STEP 4e-5·(hell−10) + STAR_CRUMB_OATH_STEP 1.5e-5·oath
-points`, and **0 below Hell 10** and in festival mode. Inserted `MOD_CRUMB_MULT = 2.5` at that one site, so
-every source scales together (Hell 15 no oaths 0.0275 % → 0.069 % per kill, MVP 3.5 % → 8.75 %) and the
-Hell-10 gate stays the developers'.
+**(b) The tier roll** — `Potential.roll()` (`core/potential.gd:124`), the only roller. Shipped:
+`POTENTIAL_UP = [0.10, 0.04]` (a reroll climbs one tier with that probability, so Raro → Legendario needs
+*two* successes ⇒ ~36 rolls), `POTENTIAL_SAME = 0.2` (each of lines 2 and 3 keeps the item tier with that
+probability, else it drops one — a Legendario item therefore averages 1.4 legendary lines of 3, which is
+the "always semi" complaint), `POTENTIAL_PERFECT = 0.2`. Replaced by `MOD_POT_UP [0.30, 0.18]`,
+`MOD_POT_SAME 0.7`, `MOD_POT_PERFECT 0.3`.
 
-**(b) The tier roll** — `Potential.roll()` (`core/potential.gd:124`, one function, used by the Star Smith
-panel and nothing else). Shipped numbers: `POTENTIAL_UP = [0.10, 0.04]` (chance a reroll climbs one tier —
-so Raro → Legendario needs *two* successes), `POTENTIAL_SAME = 0.2` (each of lines 2 and 3 keeps the item
-tier with that probability, else it drops a tier — a Legendario item therefore averages only 1.4 legendary
-lines of 3), `POTENTIAL_PERFECT = 0.2`, `POTENTIAL_LOCK_COST = 3` (price = `1 + 3·locked` = 1 / 4 / 7 / 10
-crumbs — the sequence you quoted). Replaced by `MOD_POT_UP [0.30, 0.18]`, `MOD_POT_SAME 0.7`,
-`MOD_POT_PERFECT 0.3`, `MOD_POT_LOCK_COST 2` (1 / 3 / 5 / 7).
+**Price per reroll is deliberately NOT touched** (`potential.gd:128` still reads
+`POTENTIAL_LOCK_COST = 3`, i.e. 1 / 4 / 7 / 10 crumbs per roll for 0 / 1 / 2 / 3 locks). Rationale: the
+cost is the one knob that would need a rewritten shipped line *and* a re-think of every downstream price,
+so keeping it shipped is the cheaper maintenance choice — the grind gets cheaper anyway because it is shorter.
 
-Measured by running the **actual `roll()` function** under Godot 4.7.2 (3 000 items for the climb,
-20 000 rolls at top tier), vanilla parameters vs mod parameters, same code path:
+Measured by executing the **real `roll()`** under Godot 4.7.2 with vanilla vs mod parameters (3 000 items
+for the climb, 20 000 rolls at top tier):
 
-| | vanilla | mod v7 |
+| | vanilla | mod v8 |
 | --- | --- | --- |
-| rerolls Raro → Legendario (fresh item, no locks) | 35.7 | **10.0** |
-| crumbs to get one item to Legendario — 0 / 1 / 2 / 3 locks | 36 / 143 / 250 / 357 | 10 / 30 / 50 / **70** |
-| legendary lines per roll at Legendario: 1/3 · 2/3 · 3/3 | 64.0 % · 31.8 % · **4.2 %** | 8.8 % · 41.9 % · **49.3 %** |
-| mean legendary lines of 3 | 1.40 | **2.41** |
+| rerolls Raro → Legendario (fresh item) | 35.7 | **10.1** |
+| crumbs per item to reach Legendario — 0 / 1 / 2 / 3 locks (shipped prices) | 36 / 143 / 250 / **357** | 10 / 40 / 70 / **101** |
+| legendary lines per roll at Legendario — 1/3 · 2/3 · **3/3** | 64.0 % · 31.8 % · **4.2 %** | 9.2 % · 43.0 % · **47.9 %** |
+| mean legendary lines of 3 | 1.40 | **2.40** |
 | perfect share of legendary lines | 20.1 % | 29.8 % |
 
-i.e. a fully-locked reroll costs 5.1× less in total because both the price and the number of rolls went
-down. Probe: `user://mod_probe_potential.txt` (every 8th roll) → `rolls=… tier=… legendary_lines=n/3
-perfect=… (up=[30, 18] same=0.70 perfect_p=0.30 lock_cost=2)`.
-
-Tooling note: `patch -p4 --merge` leaves `.orig` backups next to the merged files and `git add -A` happily
-commits them — three of them once reached the tree and bloated `mod-latest.patch` to 7 742 lines. Removed,
-now ignored (`*.gd.orig`, `*.rej`); they had never entered the pack because `build.sh` only globs `*.gd`.
+Probe: `user://mod_probe_potential.txt` (every 8th roll) → `rolls=… tier=… legendary_lines=n/3 perfect=…
+(up=[30, 18] same=0.70 perfect_p=0.30)`. Revision history: v7 additionally rewrote the lock-cost line;
+reverted 2026-11-20 to keep the mod insert-only where it can be.

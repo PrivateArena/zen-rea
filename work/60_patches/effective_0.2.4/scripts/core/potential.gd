@@ -13,13 +13,13 @@ const LINES: = 3
 # [MOD] Star Potential odds. Shipped values: POTENTIAL_UP = [0.1, 0.04] (a reroll climbs one tier only
 # that often, so Raro -> Legendario needs two successes: ~35 rerolls expected), POTENTIAL_SAME = 0.2
 # (each of lines 2 and 3 keeps the item's tier with that probability, else it drops one - even a
-# Legendario item therefore shows only 1.4 legendary lines of 3), POTENTIAL_PERFECT = 0.2, and
-# POTENTIAL_LOCK_COST = 3 (price per reroll = 1 + 3*locked = 1 / 4 / 7 / 10 crumbs). The mod reads the
-# same table shape and keeps everything else (line keys, tear upgrade, UI, achievements) as shipped.
+# Legendario item therefore shows only 1.4 legendary lines of 3), POTENTIAL_PERFECT = 0.2. The mod reads
+# the same table shape and keeps everything else as shipped - INCLUDING POTENTIAL_LOCK_COST = 3, so the
+# price per reroll is still 1 / 4 / 7 / 10 crumbs: locking stays exactly as the developers priced it, and
+# the only reason a full grind is cheaper now is that it takes fewer rolls.
 const MOD_POT_UP: = [0.3, 0.18]
 const MOD_POT_SAME: = 0.7
 const MOD_POT_PERFECT: = 0.3
-const MOD_POT_LOCK_COST: = 2
 static var mod_pot_rolls: = 0
 
 
@@ -125,7 +125,7 @@ static func tier_color(t: int) -> Color:
 
 
 static func cost(locked: int) -> int:
-	return 1 + MOD_POT_LOCK_COST * locked
+	return 1 + GameData.POTENTIAL_LOCK_COST * locked
 
 
 
@@ -178,8 +178,8 @@ static func roll(it: Dictionary, locked: Array) -> bool:
 				leg += 1
 				if bool((l as Dictionary).get("p", false)):
 					perf += 1
-		var s: = "rolls=%d  tier=%d  legendary_lines=%d/3  perfect=%d  (up=%s same=%.2f perfect_p=%.2f lock_cost=%d)" % [
-			mod_pot_rolls, t, leg, perf, str(MOD_POT_UP), MOD_POT_SAME, MOD_POT_PERFECT, MOD_POT_LOCK_COST]
+		var s: = "rolls=%d  tier=%d  legendary_lines=%d/3  perfect=%d  (up=%s same=%.2f perfect_p=%.2f)" % [
+			mod_pot_rolls, t, leg, perf, str(MOD_POT_UP), MOD_POT_SAME, MOD_POT_PERFECT]
 		print("MODPROBE potential: ", s)
 		var f: = FileAccess.open("user://mod_probe_potential.txt", FileAccess.WRITE)
 		if f != null:

@@ -20,7 +20,6 @@ const MOD_TAG: = "mod-v3 mechanics cap=0.15"
 const MOD_TAG: = "mod-v6 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5"
 const MOD_TAG: = "mod-v4 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6]"
 const MOD_TAG: = "mod-v4 mechanics_cap=0.15 clock_cap=3.0 choice_w=[52,27,15,6]"
-	return 1 + GameData.POTENTIAL_LOCK_COST * locked
 	elif t < GameData.POTENTIAL_TIERS.size() and randf() < float(GameData.POTENTIAL_UP[t - 1]):
 		var lt: = t if i == 0 or randf() < GameData.POTENTIAL_SAME else maxi(1, t - 1)
 			line["p"] = randf() < GameData.POTENTIAL_PERFECT
