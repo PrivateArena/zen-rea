@@ -5856,6 +5856,13 @@ const GEAR_GRADE_COST_DEFAULT: = 0.5
 const GRADE_PITY: = 0.025
 const GRADE_CHANCE_MAX: = 0.75
 const GRADE_PITY_MAX: = 40
+# [MOD] Grade success boost, one multiplier per TARGET tier (index 1..5 = D C B A S over
+# WEAPON_GRADES[].chance = .90 / .70 / .50 / .35 / .25). Applied inside grade_chance() below, so the roll,
+# the "% de éxito" label, the post-failure hint and the hover-card pity delta all move together. Result:
+# D 90% (unchanged), C 80.5%, B 75%, A 70%, S 65% - still monotone, still paid for in ore and zeny, but the
+# expected attempts for an S drop from ~3.3 to ~1.6. MOD_GRADE_CAP leaves headroom for the shipped pity.
+const MOD_GRADE_MULT: = [1.0, 1.15, 1.5, 2.0, 2.6]
+const MOD_GRADE_CAP: = 0.85
 
 
 
@@ -5871,6 +5878,9 @@ const HARMONY_SHARE: = [0.0, 0.03, 0.06, 0.1, 0.15, 0.2]
 
 static func grade_chance(g: int, pity: int) -> float:
 	var base: = float(WEAPON_GRADES[clampi(g, 1, WEAPON_GRADES.size() - 1)].chance)
+	# [MOD] boost the base BEFORE the shipped pity line; the outer maxf() below then uses the boosted value
+	# as its floor, which is what lets the boost exceed GRADE_CHANCE_MAX (0.75) where the raw table was lower.
+	base = maxf(base, minf(MOD_GRADE_CAP, base * float(MOD_GRADE_MULT[clampi(g, 1, MOD_GRADE_MULT.size()) - 1])))
 	return maxf(base, minf(base + GRADE_PITY * clampi(pity, 0, GRADE_PITY_MAX), GRADE_CHANCE_MAX))
 
 

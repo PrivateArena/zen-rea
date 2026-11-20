@@ -576,3 +576,45 @@ for the climb, 20 000 rolls at top tier):
 Probe: `user://mod_probe_potential.txt` (every 8th roll) → `rolls=… tier=… legendary_lines=n/3 perfect=…
 (up=[30, 18] same=0.70 perfect_p=0.30)`. Revision history: v7 additionally rewrote the lock-cost line;
 reverted 2026-11-20 to keep the mod insert-only where it can be.
+
+## 16. Mod v9 — Nakurusa refining and grading (installed, pack sha `d5979566200f1321…`)
+
+Two mechanics, two shared choke points — both are the *displayed* number too, so no UI label can drift.
+
+**Refining.** The chance table is `GameData.REFINE_RATES` (`game_data.gd:8051`), indexed by the item's
+**current** `+N`, one row per weapon tier (`_rate_key` = `w1..w4`) plus `armor`; `MAX_REFINE 10`; failure
+in the in-run path is `-1` (`equipment.gd:1613`), and `SMITH_REFINE_LUCK = 0.15` (`game_data.gd:2076`) is
+*not* a rate — it is the Blacksmith/Whitesmith per-failure pity added on top (`equipment.gd:1604`, cleared
+on success). Everything reads one function, `Equipment.refine_chance()` (`equipment.gd:518`): the in-run
+smith roll, the Nakurusa roll (through `_ore_chance`, which then adds `ENRICHED_BONUS`/`HD_BONUS`), the
+equipment-panel gauge, the refiner's `% de éxito`, and the Automatic material picker. Boosted there:
+`MOD_REFINE_MULT 2.0`, `MOD_REFINE_CAP 0.85`, floored with `maxf()` so it can never be worse than shipped.
+`REFINE_RATES` itself is untouched on purpose — `Equipment.refine_safe()` derives the "seguro hasta +N"
+text, the ×5 protect fee trigger and the break warnings from that table.
+
+**Grading.** One source: `GameData.grade_chance(tier, pity)` (`game_data.gd:5872`) — used by the roll
+(`menus.gd:24663`), the `% de éxito` label, the post-failure hint and the hover-card pity delta. Base
+`WEAPON_GRADES[].chance` = D .90 C .70 B .50 A .35 S .25 with a soft pity `GRADE_PITY 0.025`/failure,
+clamped by `GRADE_CHANCE_MAX 0.75` and `GRADE_PITY_MAX 40` — no hard guarantee anywhere. **Pure insertion**
+(one line before the shipped `return`) with `MOD_GRADE_MULT [1.0, 1.15, 1.5, 2.0, 2.6]` (per target tier)
+and `MOD_GRADE_CAP 0.85`; the outer `maxf()` re-uses the boosted base as its floor, which is what lets the
+boost pass the 0.75 cap. Prices (ore/HD/zeny) and the `GRADE_MIN_REFINE 10` gate are untouched.
+
+Measured in real Godot 4.7.2 with the shipped tables and the patched expressions, vanilla parameters vs
+mod parameters through the same code (30 000 grade rolls per tier, 3 000 random walks per refine cell):
+
+| grade | vanilla | mod v9 |
+| --- | --- | --- |
+| chances D / C / B / A / S | 90 / 70 / 50 / 35 / 25 % | 90 / 80.5 / 75 / 70 / **65 %** |
+| rolls per success (pity included) | 1.11 / 1.41 / 1.92 / 2.58 / **3.31** | 1.11 / 1.24 / 1.33 / 1.41 / **1.51** |
+| expected cost of an S weapon | 1 324 ori + 6.6 HD + 19.9 M z | **604 ori + 3.0 HD + 9.1 M z** |
+
+| refine, attempts `+0 → +10` (failure −1) | vanilla | mod v9 |
+| --- | --- | --- |
+| `w1` weapon, no smith pity / with `SMITH_REFINE_LUCK` | 46.0 / 36.3 | **15.1 / 14.3** |
+| `w4` weapon or `armor`, no pity / with pity | 2 385.8 / 916.2 | **74.4 / 50.8** |
+| key steps w1 +7 +8 +9 +10 | 100 / 60 / 40 / 19 % | 100 / 85 / 80 / **38 %** |
+| key steps w4 +5 … +10 | 60 / 40 / 40 / 20 / 9 % | 85 / 80 / 80 / 40 / **18 %** |
+
+The `w4`/`armor` gain is deliberately large: the walk-with-`-1` cost is exponentially sensitive to the last
+steps, and 9 % was where the mechanic stopped being fun.

@@ -212,7 +212,7 @@ func _init() -> void :
 const MOD_TIME_SCALE_CAP: = 3.0
 # [MOD] one-shot proof that this (patch-layer) script is the one the running process loaded.
 # Enemy.setup() fires on every spawn in every mode, so the probe lands within seconds of a run start.
-const MOD_TAG: = "mod-v8 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 pot_up=[30,18] pot_same=0.70"
+const MOD_TAG: = "mod-v9 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 pot_up=[30,18] pot_same=0.70 refine=x2 grade=[1,1.15,1.5,2,2.6]"
 static var mod_probe_done: = false
 static var mod_probe_spawns: = 0
 static var mod_clock_capped: = 0
