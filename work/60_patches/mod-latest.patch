@@ -1,7 +1,7 @@
-diff --git a/work/60_patches/effective_0.2.3/scripts/core/enemy.gd b/work/60_patches/effective_0.2.3/scripts/core/enemy.gd
-index bec9cad..da632a1 100644
---- a/work/60_patches/effective_0.2.3/scripts/core/enemy.gd
-+++ b/work/60_patches/effective_0.2.3/scripts/core/enemy.gd
+diff --git a/work/60_patches/effective_0.2.4/scripts/core/enemy.gd b/work/60_patches/effective_0.2.4/scripts/core/enemy.gd
+index bec9cad..eadd797 100644
+--- a/work/60_patches/effective_0.2.4/scripts/core/enemy.gd
++++ b/work/60_patches/effective_0.2.4/scripts/core/enemy.gd
 @@ -207,6 +207,15 @@ func _init() -> void :
  
  
@@ -11,7 +11,7 @@ index bec9cad..da632a1 100644
 +const MOD_TIME_SCALE_CAP: = 3.0
 +# [MOD] one-shot proof that this (patch-layer) script is the one the running process loaded.
 +# Enemy.setup() fires on every spawn in every mode, so the probe lands within seconds of a run start.
-+const MOD_TAG: = "mod-v4 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6]"
++const MOD_TAG: = "mod-v6 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5"
 +static var mod_probe_done: = false
 +static var mod_probe_spawns: = 0
 +static var mod_clock_capped: = 0
@@ -47,11 +47,11 @@ index bec9cad..da632a1 100644
  	def = GameData.MONSTERS[id]
  	cc_dr = {}
  
-diff --git a/work/60_patches/effective_0.2.3/scripts/core/player.gd b/work/60_patches/effective_0.2.3/scripts/core/player.gd
-index c6ee18d..b2a3386 100644
---- a/work/60_patches/effective_0.2.3/scripts/core/player.gd
-+++ b/work/60_patches/effective_0.2.3/scripts/core/player.gd
-@@ -1,6 +1,27 @@
+diff --git a/work/60_patches/effective_0.2.4/scripts/core/player.gd b/work/60_patches/effective_0.2.4/scripts/core/player.gd
+index 79ddf68..5a4e0d2 100644
+--- a/work/60_patches/effective_0.2.4/scripts/core/player.gd
++++ b/work/60_patches/effective_0.2.4/scripts/core/player.gd
+@@ -1,6 +1,33 @@
  class_name Player
  extends Node3D
  
@@ -63,7 +63,6 @@ index c6ee18d..b2a3386 100644
 +const MOD_MECH_PCT_CAP: = 0.15
 +# hits bigger than 4x max HP are the game's own executions (main.gd tour/debug kills use 1e9..1e12)
 +const MOD_MECH_EXECUTE_OVER: = 4.0
-+const MOD_TAG: = "mod-v4 mechanics_cap=0.15 clock_cap=3.0 choice_w=[52,27,15,6]"
 +static var mod_mech_hits: = 0
 +static var mod_mech_capped: = 0
 +static var mod_mech_saved: = 0.0
@@ -75,11 +74,18 @@ index c6ee18d..b2a3386 100644
 +const MOD_CHOICE_W: = [52.0, 27.0, 15.0, 6.0]
 +static var mod_choice_n: = [0, 0, 0, 0]
 +static var mod_choice_rolls: = 0
++# [MOD] Flat run-XP multiplier. Every point of run XP enters through add_xp below (kill gems, co-op
++# shares, tower, net pickups), so this is the one global knob. The curve is need(L) =
++# int((4+5(L-1)+1.2(L-1)^1.6)(1+(L-1)/40)) ~ L^2.6, so XP^0.29 = level: x1.5 XP is ~+56 levels at
++# the Lv 443 / 40-minute mark (35.3M -> 53.0M XP), not +50%. It also raises Class Lv, because Class
++# EXP is roundi(xp_gained), which this feeds. See PATCH_SYSTEM.md §14.
++const MOD_XP_MULT: = 1.5
++const MOD_TAG: = "mod-v6 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5"
 +
  
  signal leveled_up
  signal died
-@@ -3559,6 +3580,29 @@ func take_damage(amount: float, world: World, from: Enemy = null, pierce: = fals
+@@ -3737,6 +3764,29 @@ func take_damage(amount: float, world: World, from: Enemy = null, pierce: = fals
  		amount = maxf(1.0, amount * (1.0 - damage_reduction()) * (1.0 - vit_cut))
  
  
@@ -109,7 +115,15 @@ index c6ee18d..b2a3386 100644
  	if not touch and not hazard and effects.has("hit_shield") and world.clock >= _gryphon_at:
  
  		_gryphon_at = world.clock + GameData.GRYPHON_GUARD_CD
-@@ -5156,6 +5200,11 @@ func _roll_rarity(o: Dictionary) -> void :
+@@ -5171,6 +5221,7 @@ func grant_levels(n: int) -> void :
+ 
+ func add_xp(amount: float) -> void :
+ 	amount *= pace_xp
++	amount *= MOD_XP_MULT
+ 	xp_gained += amount * xp_mult
+ 	xp += amount * xp_mult
+ 	while xp >= xp_need:
+@@ -5347,6 +5398,11 @@ func _roll_rarity(o: Dictionary) -> void :
  	var w: Array[float] = []
  	for t in table:
  		w.append(float(t.w))
@@ -121,7 +135,7 @@ index c6ee18d..b2a3386 100644
  	var shift: = minf(w[0] - 20.0, GameData.CHOICE_LUK_SHIFT * eff_stat("luk"))
  	w[0] -= shift
  	for i in range(1, w.size()):
-@@ -5175,6 +5224,19 @@ func _roll_rarity(o: Dictionary) -> void :
+@@ -5366,6 +5422,19 @@ func _roll_rarity(o: Dictionary) -> void :
  	if o.kind == "stat":
  		steps = mini(steps, GameData.STAT_HARD_CAP - cur)
  	o["rarity"] = tier
@@ -141,11 +155,11 @@ index c6ee18d..b2a3386 100644
  	o["from"] = cur
  	o["level"] = cur + steps
  
-diff --git a/work/60_patches/effective_0.2.3/scripts/core/tower_events.gd b/work/60_patches/effective_0.2.3/scripts/core/tower_events.gd
-index 73e24a8..8e3467c 100644
---- a/work/60_patches/effective_0.2.3/scripts/core/tower_events.gd
-+++ b/work/60_patches/effective_0.2.3/scripts/core/tower_events.gd
-@@ -480,18 +480,54 @@ func _tick_wheel(delta: float) -> void :
+diff --git a/work/60_patches/effective_0.2.4/scripts/core/tower_events.gd b/work/60_patches/effective_0.2.4/scripts/core/tower_events.gd
+index d2ef408..6df5abb 100644
+--- a/work/60_patches/effective_0.2.4/scripts/core/tower_events.gd
++++ b/work/60_patches/effective_0.2.4/scripts/core/tower_events.gd
+@@ -482,18 +482,54 @@ func _tick_wheel(delta: float) -> void :
  
  
  
@@ -203,10 +217,10 @@ index 73e24a8..8e3467c 100644
  
  func _wheel_show(id: String) -> void :
  	var e: Dictionary = tower.wheel_entry(id)
-diff --git a/work/60_patches/effective_0.2.3/scripts/core/tower_run.gd b/work/60_patches/effective_0.2.3/scripts/core/tower_run.gd
-index fec449b..82bc79b 100644
---- a/work/60_patches/effective_0.2.3/scripts/core/tower_run.gd
-+++ b/work/60_patches/effective_0.2.3/scripts/core/tower_run.gd
+diff --git a/work/60_patches/effective_0.2.4/scripts/core/tower_run.gd b/work/60_patches/effective_0.2.4/scripts/core/tower_run.gd
+index 453a33a..95e79f1 100644
+--- a/work/60_patches/effective_0.2.4/scripts/core/tower_run.gd
++++ b/work/60_patches/effective_0.2.4/scripts/core/tower_run.gd
 @@ -1,6 +1,12 @@
  class_name TowerRun
  extends Node
@@ -220,9 +234,9 @@ index fec449b..82bc79b 100644
  
  
  
-@@ -907,16 +913,17 @@ func hero_mult() -> float:
- 
- func scale_enemy(e: Enemy) -> void :
+@@ -952,16 +958,17 @@ func scale_enemy(e: Enemy) -> void :
+ 	if e.prop != "":
+ 		return
  	var f: = eff() - 1
 +	var fg: = minf(MOD_TOWER_FLOOR_CAP, float(f))
  	var mvp: bool = e.def.get("mvp", false)
@@ -240,10 +254,10 @@ index fec449b..82bc79b 100644
  	e.speed *= (1.0 + minf(GameData.TOWER_SPEED_MAX, GameData.TOWER_SPEED_STEP * f) + GameData.TOWER_CYCLE_SPEED * cycle_of(floor))\
  	* (1.0 if mvp else float(r.get("speed", 1.0)))
  	if r.has("scale") and not mvp and e.visual is Node3D:
-diff --git a/work/60_patches/effective_0.2.3/scripts/core/tower_traps.gd b/work/60_patches/effective_0.2.3/scripts/core/tower_traps.gd
+diff --git a/work/60_patches/effective_0.2.4/scripts/core/tower_traps.gd b/work/60_patches/effective_0.2.4/scripts/core/tower_traps.gd
 index ddc02ac..0a8aca4 100644
---- a/work/60_patches/effective_0.2.3/scripts/core/tower_traps.gd
-+++ b/work/60_patches/effective_0.2.3/scripts/core/tower_traps.gd
+--- a/work/60_patches/effective_0.2.4/scripts/core/tower_traps.gd
++++ b/work/60_patches/effective_0.2.4/scripts/core/tower_traps.gd
 @@ -7,6 +7,16 @@ extends RefCounted
  
  const DODGE_HEAL: = 0.02

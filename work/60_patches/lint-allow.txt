@@ -17,3 +17,6 @@ const MOD_TAG: = "mod-v3 mechanics cap=0.15"
 		total += float(e.w)
 		r -= float(e.w)
 			return str(e.id)
+const MOD_TAG: = "mod-v6 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5"
+const MOD_TAG: = "mod-v4 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6]"
+const MOD_TAG: = "mod-v4 mechanics_cap=0.15 clock_cap=3.0 choice_w=[52,27,15,6]"

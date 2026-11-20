@@ -1,6 +1,33 @@
 class_name Player
 extends Node3D
 
+# [MOD] Ceiling for "Mechanics" damage - the damage-report row that groups every pierce hit with no
+# enemy behind it (hell rain, meteors, heralds, shadow-MVP mechanics, storm, Niflheim fog, Marca del
+# Apocalipsis, corrupt burst, tower hazards). Those hits scale with OUR max HP and skip armour, VIT,
+# Guard at full rate and the "Aguanta" one-hit save, so at ~1M HP a meteor landed 514k (0.18 pct x 3.0
+# stillness stack). See work/60_patches/PATCH_SYSTEM.md §7/§11.
+const MOD_MECH_PCT_CAP: = 0.15
+# hits bigger than 4x max HP are the game's own executions (main.gd tour/debug kills use 1e9..1e12)
+const MOD_MECH_EXECUTE_OVER: = 4.0
+static var mod_mech_hits: = 0
+static var mod_mech_capped: = 0
+static var mod_mech_saved: = 0.0
+static var mod_mech_worst: = 0.0
+# [MOD] Level-up rarity weights, replacing GameData.CHOICE_RARITY w = [70, 22, 7, 1] (sum 100 -> a
+# Legendaria offer is 1.0% at 0 luck, 2.7% at the luck ceiling). Probabilities are w[i]/sum(w), so
+# these give 52% / 27% / 15% / 6.0% = 6x the shipped legendary rate. steps (levels granted) and the
+# all_stats bonus still come from the shipped table, and luck still shifts weight out of Comun.
+const MOD_CHOICE_W: = [52.0, 27.0, 15.0, 6.0]
+static var mod_choice_n: = [0, 0, 0, 0]
+static var mod_choice_rolls: = 0
+# [MOD] Flat run-XP multiplier. Every point of run XP enters through add_xp below (kill gems, co-op
+# shares, tower, net pickups), so this is the one global knob. The curve is need(L) =
+# int((4+5(L-1)+1.2(L-1)^1.6)(1+(L-1)/40)) ~ L^2.6, so XP^0.29 = level: x1.5 XP is ~+56 levels at
+# the Lv 443 / 40-minute mark (35.3M -> 53.0M XP), not +50%. It also raises Class Lv, because Class
+# EXP is roundi(xp_gained), which this feeds. See PATCH_SYSTEM.md §14.
+const MOD_XP_MULT: = 1.5
+const MOD_TAG: = "mod-v6 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5"
+
 
 signal leveled_up
 signal died
@@ -3737,6 +3764,29 @@ func take_damage(amount: float, world: World, from: Enemy = null, pierce: = fals
 		amount = maxf(1.0, amount * (1.0 - damage_reduction()) * (1.0 - vit_cut))
 
 
+	# [MOD] apply the ceiling after all mitigation, before shields absorb, so the number the meter and
+	# the run log show is the one that can actually kill. The probe reports every mechanics hit at first
+	# and then every 8th, with running totals, so the file also proves the cap is engaging (or that the
+	# hits were already below it).
+	if pierce and from == null and amount < max_hp * MOD_MECH_EXECUTE_OVER:
+		var raw: = amount
+		var ceiling: = max_hp * MOD_MECH_PCT_CAP
+		if raw > ceiling:
+			mod_mech_capped += 1
+			mod_mech_saved += raw - ceiling
+			mod_mech_worst = maxf(mod_mech_worst, raw)
+			amount = ceiling
+		mod_mech_hits += 1
+		if mod_mech_hits == 1 or mod_mech_hits % 8 == 0:
+			print("MODPROBE %s mechanics hit #%d '%s': %.0f -> %.0f of max_hp %.0f (was %.2f, cap %.2f) | capped %d, avoided %.0f" % [
+				MOD_TAG, mod_mech_hits, what, raw, amount, max_hp, raw / max_hp, MOD_MECH_PCT_CAP, mod_mech_capped, 
+				mod_mech_saved])
+			var mf: = FileAccess.open("user://mod_probe_player.txt", FileAccess.WRITE)
+			if mf != null:
+				mf.store_string("%s\nhits=%d\ncapped=%d\navoided_total=%.0f\nworst_hit=%.0f (%.2f of max_hp)\nlast_label=%s\nlast_hit=%.0f -> %.0f\nmax_hp=%.0f\npid=%d\nat=%s\n" % [
+					MOD_TAG, mod_mech_hits, mod_mech_capped, mod_mech_saved, mod_mech_worst, mod_mech_worst / max_hp,
+					what, raw, amount, max_hp, OS.get_process_id(), Time.get_datetime_string_from_system()])
+				mf.close()
 	if not touch and not hazard and effects.has("hit_shield") and world.clock >= _gryphon_at:
 
 		_gryphon_at = world.clock + GameData.GRYPHON_GUARD_CD
@@ -5171,6 +5221,7 @@ func grant_levels(n: int) -> void :
 
 func add_xp(amount: float) -> void :
 	amount *= pace_xp
+	amount *= MOD_XP_MULT
 	xp_gained += amount * xp_mult
 	xp += amount * xp_mult
 	while xp >= xp_need:
@@ -5347,6 +5398,11 @@ func _roll_rarity(o: Dictionary) -> void :
 	var w: Array[float] = []
 	for t in table:
 		w.append(float(t.w))
+	# [MOD] swap the rarity weights (the roll below, the luck shift and the tier->steps/all_stats lookup
+	# all keep using the shipped table, so nothing else about the offer changes)
+	if MOD_CHOICE_W.size() == w.size():
+		for i in w.size():
+			w[i] = float(MOD_CHOICE_W[i])
 	var shift: = minf(w[0] - 20.0, GameData.CHOICE_LUK_SHIFT * eff_stat("luk"))
 	w[0] -= shift
 	for i in range(1, w.size()):
@@ -5366,6 +5422,19 @@ func _roll_rarity(o: Dictionary) -> void :
 	if o.kind == "stat":
 		steps = mini(steps, GameData.STAT_HARD_CAP - cur)
 	o["rarity"] = tier
+	# [MOD] measured odds from the real run, so "is it working?" is a number and not a feeling:
+	# user://mod_probe_choices.txt (also printed) shows the distribution over every roll so far.
+	mod_choice_n[tier] += 1
+	mod_choice_rolls += 1
+	if mod_choice_rolls % 64 == 1:
+		var txt: = "rolls=%d  Comun=%d  Rara=%d  Epica=%d  Legendaria=%d  P(legend)=%.1f%%  weights=%s" % [
+			mod_choice_rolls, mod_choice_n[0], mod_choice_n[1], mod_choice_n[2], mod_choice_n[3], 
+			100.0 * mod_choice_n[3] / mod_choice_rolls, str(MOD_CHOICE_W)]
+		print("MODPROBE choices: ", txt)
+		var cf: = FileAccess.open("user://mod_probe_choices.txt", FileAccess.WRITE)
+		if cf != null:
+			cf.store_string(txt + "\nat=" + Time.get_datetime_string_from_system() + "\n")
+			cf.close()
 	o["from"] = cur
 	o["level"] = cur + steps
 

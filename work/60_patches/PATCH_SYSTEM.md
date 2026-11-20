@@ -485,3 +485,57 @@ side by side):
 | per event: at least one super | 12.0 % | **73.2 %** |
 
 Probe: `user://mod_probe_wheel.txt` (rewritten every 4 spins) → `spins=… super=… (P=x%) fury=… …`.
+
+## 14. Update 0.2.3 -> 0.2.4, as executed (2026-11-20) — §10 recipe is now PROVEN
+
+What the updater did to us: `patch_0.2.3.pck` (our modded copy) was **deleted**, `patch_0.2.4.pck`
+(12.7 MB, 167 members vs 123, nothing removed => each patch pack is cumulative over the bridge) written,
+`state.json` rewritten, and the unknown directory `patches2/` — where we kept a pristine backup —
+**wiped**. Lesson recorded in `play.sh`: pristine packs now live only outside `user://`, in `orig/`.
+
+Migration commands (all of them ran clean; keep this as the runbook):
+
+```sh
+cp "$P/patches/patch_0.2.4.pck" orig/                        # pristine copy BEFORE anything else
+gdre_tools --extract=orig/patch_0.2.4.pck --include='*.gdc' --output=raw_0.2.4          # 87 scripts
+for g in $(find raw_0.2.4 -name '*.gdc'); do                # per-file decompile, no remap grafting
+  gdre_tools --decompile="$PWD/$g" --bytecode=4.5.0-stable \
+             --output="$PWD/scripts_full_0.2.4/$(dirname ${g#raw_0.2.4/})"; done        # 87/87 ok
+rm -rf effective_0.2.4 && mkdir -p effective_0.2.4
+cp effective_0.2.3/project.godot effective_0.2.4/
+for L in ../25_scripts scripts_full_0.2.0 scripts_full_0.2.4; do
+  for sub in scripts addons; do [ -d "$L/$sub" ] && cp -r "$L/$sub/." effective_0.2.4/"$sub"/; done
+done                                                        # 171 .gd (4 new) => tag v0.2.4-decompiled
+patch -p4 -d effective_0.2.4 --merge --dry-run < mod-latest.patch   # 0 conflicts, then for real
+MOD_VER=0.2.4 ./build.sh --deep --install                   # MOD_VER only needed if state.json lags
+```
+
+Dev changes vs our tree: 104 of 167 scripts byte-identical, **63 changed, 4 new**
+(`core/perf_watch`, `core/souls`, `core/soul_icon`, `ui/bestiary` + `pact_*` skill icons). Of *our* five
+patched files: `enemy.gd` and `tower_traps.gd` untouched by the dev, `tower_events.gd` 4 lines,
+`tower_run.gd` 51, `player.gd` 291 — and `mod-latest.patch` still applied with **zero conflicts**, which
+is the payoff of keeping every mod as a pure insertion at a named choke point.
+
+New 0.2.4 systems worth knowing before we mod further (from `game_data.gd` const diff, 667 changed lines):
+souls as a 12th equip slot (`EQUIP_SLOTS` + `"soul"`, `SOUL_POT_REFUND`, `LEGEND_SOUL_PRICE`), hit-steady
+`MOB_HIT_*`/`HIT_RESIST_VIT` with `MOB_HIT_TOWER_FLOOR`/`MOB_HIT_ENDLESS_STEP`, `FOCUS_*`, `HARMONY_*`
+set bonus, `GRADE_PITY`/`GRADE_CHANCE_MAX`, gacha `epic_pity: 5`, and **`OATH_CURSE_MAX [0.3,0.45] ->
+[0.4,0.6]`** (`oaths.gd:209` caps `oath_curse`, which is a max-HP multiplier: `max_hp *= 1 - oath_curse`,
+`player.gd:1638`) — i.e. the hell-15-with-oath punishment they mention is *more* HP loss, and our
+`MOD_MECH_PCT_CAP` is expressed as a fraction of that reduced pool, so it still means the same thing.
+Also new: `CROWD_FUSE_MAX = 30`, which caps the fused-monster XP packing discussed in §14.1.
+
+### 14.1 Mod v6 = v5 + `MOD_XP_MULT = 1.5` (installed, pack sha `bfc81d3a3dcaf9d0…`)
+
+XP analysis (why the other player's 401 @ 28:45 looked "faster" than 443 @ 40:00 — it was not): the curve
+`game_data.gd:11431` is `need(L) = int((4+5(L-1)+1.2(L-1)^1.6)(1+(L-1)/40))`, so cumulative XP ~ L^3.5 and
+`Class EXP` on the summary is literally `roundi(player.xp_gained)` (`main.gd:16032`). Both runs measured
+14.6k-14.7k XP/s; feeding our rate for his 1725 s lands on level 402. Details in §14.1 of the chat record /
+`AGENTS.md`. Insertion is one line in the single writer of run XP (`player.gd:5216 add_xp`), before both
+`xp_gained` and `xp` are written, so it lifts Base Lv *and* Class Lv:
+
+| `MOD_XP_MULT` | 40-minute total XP | ≈ Base Lv | vs today |
+| --- | --- | --- | --- |
+| 1.25 | 44.2M | ~472 | +29 |
+| **1.50** | 53.0M | **~499** | **+56** |
+| 2.00 | 70.7M | ~545 | +102 |

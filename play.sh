@@ -5,8 +5,8 @@
 # Why this script exists (verified — full findings in work/60_patches/PATCH_SYSTEM.md):
 #   * The retail pack (0.1.273) is only the BASE layer. At startup the game mounts, in this order:
 #         MidgardSurvivors.pck  <-  user://patches/bridge_0.1.273_to_0.2.0.pck
-#                               <-  user://patches/patch_0.2.3.pck
-#     and the LAST mounted pack wins, so the content you play is 0.2.3.
+#                               <-  user://patches/patch_<ver>.pck   (currently patch_0.2.4.pck)
+#     and the LAST mounted pack wins, so the content you play is the newest patch.
 #   * Updater._enabled() returns false for ANY user argument after "--" (except --update-url and
 #     --lang). That silently disables the updater AND both patch mounts -> you would be playing
 #     0.1.273 content. So: engine flags go through --godot (safe), --user is loud and opt-in.
@@ -30,15 +30,25 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GAME_DIR="/media/jang/free/MidgardSurvivors/midgard-survivors-midgard-survivors-linux"
 WORK="$ROOT/work"
 LISTINGS="$WORK/logs"
-MOD_PACK="$WORK/60_patches/out/patch_0.2.3.pck"   # output of the mod build step, when it exists
 
 APP="Midgard Survivors"
 PATCHES="${XDG_DATA_HOME:-$HOME/.local/share}/godot/app_userdata/$APP/patches"
 STATE="$PATCHES/state.json"
-LIVE="$PATCHES/patch_0.2.3.pck"
 
-# sha256 of the pristine developer packs (captured 2026-11-19; patches2/ holds a byte-identical
-# backup of the two patch packs, work/logs/verify.baseline.json holds the base one).
+# Which patch pack is current? The updater rewrites state.json and DELETES the pack it replaces, so
+# never hardcode this: read it from the game's own state, else take the newest patch_*.pck on disk.
+VER=""
+if [ -f "$STATE" ]; then
+  VER=$(sed -n 's/."version": *"\([0-9][0-9.]*\)".*/\1/p' "$STATE" | tail -1)
+fi
+[ -n "$VER" ] || VER=$(ls -1t "$PATCHES"/patch_*.pck 2>/dev/null | head -1 | sed 's/.*patch_\(.*\)\.pck/\1/')
+PACK="patch_${VER:-0.0.0}.pck"
+LIVE="$PATCHES/$PACK"
+MOD_PACK="$WORK/60_patches/out/$PACK"   # output of the mod build step, when it exists
+
+# sha256 of the pristine developer packs. NOTE: the updater wiped patches2/ (an unknown directory in
+# user://) on the 0.2.4 update, so the ONLY pristine copies are work/60_patches/orig/*.pck - those are
+# what the verdict below is compared against, per pack. SHA_PATCH is the 0.2.3 fallback only.
 SHA_BASE="a8d0b35b1434571d3c2cea23c9a697a6ea032300ba47d1479f7f3b640328a8b6"
 SHA_BRIDGE="b0266960e901362fe6fcc5766fb45655c3f00a44f329a2e8b999da3ec507f028"
 SHA_PATCH="680b5dfd9cdc7290552c7e2b62057002ec0902a4573afb45ff74633e7af31b66"
@@ -63,12 +73,18 @@ done
 
 hr() { printf '%s\n' "--------------------------------------------------------------------------"; }
 
+# sha256 of the pristine copy we keep outside user:// (orig/), else the recorded 0.2.3 sha
+pristine_sha() {
+  local p="$WORK/60_patches/orig/$1"
+  if [ -f "$p" ]; then sha256sum "$p" | cut -d' ' -f1; else echo "$SHA_PATCH"; fi
+}
+
 # --- which pack owns a given res:// member --------------------------------------------------
 do_layer() {
   local spec tag f hit=0
   for spec in "BASE:$LISTINGS/pck-files.txt" \
               "BRIDGE:$LISTINGS/bridge-0.2.0-files.txt" \
-              "PATCH:$LISTINGS/patch-0.2.3-files.txt"; do
+              "PATCH:$LISTINGS/patch-${VER}-files.txt"; do
     tag="${spec%%:*}"; f="${spec#*:}"
     if [ ! -f "$f" ]; then
       echo "  (no member listing for $tag — regenerate: gdre_tools --list-files=<pack> > $f)"
@@ -104,7 +120,7 @@ do_status() {
     h=$(sha256sum "$f" | cut -d' ' -f1)
     case "${f##*/}" in
       bridge_*) want="$SHA_BRIDGE" ;;
-      *)        want="$SHA_PATCH" ;;
+      *)        want="$(pristine_sha "${f##*/}")" ;;
     esac
     if [ "$h" = "$want" ]; then verdict="official"; else verdict="MODIFIED_our_edit"; fi
     printf '  pack        %-34s %5d MB  %-18s %s...\n' "${f##*/}" "$mb" "$verdict" "${h:0:16}"
@@ -176,7 +192,7 @@ do_launch() {
       mkdir -p "$sandbox/patches"
       for f in "$PATCHES"/*.pck; do [ -e "$f" ] && ln -sfn "$f" "$sandbox/patches/${f##*/}"; done
       if [ -f "$MOD_PACK" ]; then
-        ln -sfn "$MOD_PACK" "$sandbox/patches/patch_0.2.3.pck"
+        ln -sfn "$MOD_PACK" "$sandbox/patches/$PACK"
         echo "play.sh: isolated run mounts the BUILT MOD pack instead of the official patch"
       fi
       [ -f "$STATE" ] && cp -f "$STATE" "$sandbox/state.json"
@@ -190,7 +206,7 @@ do_launch() {
   if [ ${#USER_ARGS[@]} -gt 0 ]; then
     hr
     echo "  !! user args present -> Updater._enabled() = false -> PATCHES WILL NOT MOUNT:"
-    echo "  !! you will be running stock 0.1.273 content, not 0.2.3"
+    echo "  !! you will be running stock 0.1.273 content, not $VER"
   fi
   hr; echo "  exec: ${env_prefix[*]:-} $DIR/$exe ${ENGINE_ARGS[*]:-} ${USER_ARGS[*]:+-- ${USER_ARGS[*]:-}}"
   if [ "$DRY" = 1 ]; then echo "  (--dry-run: nothing executed)"; exit 0; fi

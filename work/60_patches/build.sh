@@ -1,36 +1,59 @@
 #!/usr/bin/env bash
-# build.sh — turn the edited GDScript under effective_0.2.3/ into a mountable top-layer patch pack.
+# build.sh — turn the edited GDScript under effective_<ver>/ into a mountable top-layer patch pack.
 #
-#   ./build.sh              compile what changed + write out/patch_0.2.3.pck  (touches nothing live)
+#   ./build.sh              compile what changed + write out/patch_<ver>.pck  (touches nothing live)
 #   ./build.sh --install    ... + back the official pack up to orig/ and install into user://patches
 #   ./build.sh --deep       ... + decompile the built .gdc and list source lines it cannot show back
 #   ./build.sh --restore    put the pristine official pack back (undo the mod)
 #   ./build.sh --diff       show the source diff against the pristine baseline tag
 #
-# Source of truth  : work/60_patches/effective_0.2.3/**.gd   (git-tracked)
-# Baseline         : tag v0.2.3-decompiled -> `git diff` IS the mod, and it drives the file list, so an
+# Source of truth  : work/60_patches/effective_<ver>/**.gd   (git-tracked)
+# Baseline         : tag v<ver>-decompiled -> `git diff` IS the mod, and it drives the file list, so an
 #                    edited script can never be forgotten at pack time.
 # Bytecode target  : GDRE token 4.5.0-stable == revision 101, the revision this game's .gdc use.
-# Pack it patches  : the OFFICIAL patch_0.2.3.pck (never a previously modded one, else mods stack).
+# Pack it patches  : the OFFICIAL patch_<ver>.pck held in orig/ (never a previously modded one, else
+#                    mods stack; the updater deletes the pack it replaces, so orig/ is the authority).
+# Version          : taken from user://patches/state.json (override with MOD_VER=x.y.z). On a new
+#                    official patch: decompile the new layer, tag it v<ver>-decompiled, apply
+#                    mod-latest.patch, copy the pristine pack into orig/ - see PATCH_SYSTEM.md §5/§10.
 set -uo pipefail
+
+die() { echo "build.sh: $*" >&2; exit 1; }
+sha() { sha256sum "$1" | cut -d' ' -f1; }
 
 W="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$W/../.." && pwd)"
-SRC="$W/effective_0.2.3"; SRCREL="${SRC#"$ROOT"/}"
 BUILD="$W/build"; OUT="$W/out"; ORIG="$W/orig"; VERIFY="$W/verify"
-BASE_TAG=v0.2.3-decompiled
 RE_BIN="${RE_BIN:-/media/jang/home/PortableApp/re/bin}"
 GDRE="$RE_BIN/gdre_tools"
 BYTECODE="${BYTECODE:-4.5.0-stable}"
 APP="Midgard Survivors"
 PATCHES="${XDG_DATA_HOME:-$HOME/.local/share}/godot/app_userdata/$APP/patches"
-LIVE="$PATCHES/patch_0.2.3.pck"
-SHA_OFFICIAL="680b5dfd9cdc7290552c7e2b62057002ec0902a4573afb45ff74633e7af31b66"
-PACK=patch_0.2.3.pck
+STATE="$PATCHES/state.json"
 
-die() { echo "build.sh: $*" >&2; exit 1; }
+VER="${MOD_VER:-}"
+if [ -z "$VER" ] && [ -f "$STATE" ]; then
+  VER=$(sed -n 's/."version": *"\([0-9][0-9.]*\)".*/\1/p' "$STATE" | tail -1)
+fi
+case "$VER" in ''|*[!0-9.]*)
+  die "cannot determine the current patch version from $STATE - set MOD_VER=x.y.z" ;;
+esac
+PACK="patch_$VER.pck"
+LIVE="$PATCHES/$PACK"
+SRC="$W/effective_$VER"; SRCREL="${SRC#"$ROOT"/}"
+BASE_TAG="${BASE_TAG:-v$VER-decompiled}"
+SHA_OFFICIAL=""
+
+require_pristine() {
+  [ -f "$ORIG/$PACK" ] || die "no pristine official $PACK in $ORIG/.
+  The updater replaces/deletes packs in user://, so that copy is the only trustworthy base.
+  Copy it there from a fresh download (or from a pre-update backup) and rebuild - never build a mod
+  on top of an already modded pack, the edits would stack."
+  SHA_OFFICIAL=$(sha "$ORIG/$PACK")
+}
+
+[ -d "$SRC" ] || die "no decompiled source tree for v$VER: build $SRC (PATCH_SYSTEM.md §5) and tag it $BASE_TAG"
 [ -x "$GDRE" ] || die "gdre_tools not found at $GDRE (set RE_BIN, or: . /media/jang/home/PortableApp/re/activate.sh)"
-sha() { sha256sum "$1" | cut -d' ' -f1; }
 
 DEEP=0; INSTALL=0; ACTION=build
 for a in "$@"; do
@@ -51,14 +74,10 @@ fi
 
 # --- restore --------------------------------------------------------------------------------
 if [ "$ACTION" = --restore ]; then
-  [ -f "$ORIG/$PACK" ] || die "no backup in $ORIG - nothing to restore"
+  require_pristine
   cp -f "$ORIG/$PACK" "$LIVE" || die "restore failed"
   echo "restored $LIVE  ($(stat -c %s "$LIVE") B, sha $(sha "$LIVE" | cut -c1-16)...)"
-  if [ "$(sha "$LIVE")" = "$SHA_OFFICIAL" ]; then
-    echo "OK: byte-identical to the official $PACK"
-  else
-    echo "WARNING: differs from the official sha256 - check orig/ really holds the official pack"
-  fi
+  echo "OK: byte-identical to the pristine copy in $ORIG/"
   exit 0
 fi
 
@@ -109,16 +128,9 @@ done <<< "$FILES"
 [ ${#ARGS[@]} -gt 0 ] || die "no compiled output"
 
 # --- pack -----------------------------------------------------------------------------------
+require_pristine            # never patch a pack we already patched: always rebuild from orig/
 BASEPACK="$ORIG/$PACK"
-if [ ! -f "$BASEPACK" ]; then
-  [ -f "$LIVE" ] || die "neither $BASEPACK nor $LIVE exists"
-  if [ "$(sha "$LIVE")" != "$SHA_OFFICIAL" ]; then
-    echo "NOTE: $LIVE is not the official pack (a mod is already installed?) - use --restore first,"
-    die "or put the pristine file in $ORIG/: refusing to stack a mod on a modded pack"
-  fi
-  BASEPACK="$LIVE"
-fi
-echo "== base pack $BASEPACK  sha $(sha "$BASEPACK" | cut -c1-16)..."
+echo "== v$VER  base pack $BASEPACK  sha $(sha "$BASEPACK" | cut -c1-16)..."
 rm -f "$OUT/$PACK"
 "$GDRE" --pck-patch="$BASEPACK" "${ARGS[@]}" --output="$OUT/$PACK" > "$W/build.log" 2>&1 \
   || die "pck-patch failed, see $W/build.log"
@@ -170,7 +182,8 @@ fi
 echo "  built $(stat -c %s "$OUT/$PACK") B  sha $(sha "$OUT/$PACK" | cut -c1-16)..."
 # portable copy of the mod (for re-applying onto the next official build, PATCH_SYSTEM.md §10)
 ( cd "$ROOT" && git diff "$BASE_TAG" -- "$SRCREL" ) > "$W/mod-latest.patch"
-echo "  exported the mod as $W/mod-latest.patch ($(wc -l < "$W/mod-latest.patch") lines)"
+( cd "$ROOT" && git diff "$BASE_TAG" -- "$SRCREL" ) > "$W/mod-$VER.patch"
+echo "  exported the mod as $W/mod-latest.patch + mod-$VER.patch ($(wc -l < "$W/mod-latest.patch") lines)"
 
 # --- install --------------------------------------------------------------------------------
 if [ "$INSTALL" = 1 ]; then
