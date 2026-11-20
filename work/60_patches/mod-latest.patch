@@ -1,0 +1,330 @@
+diff --git a/work/60_patches/effective_0.2.3/scripts/core/enemy.gd b/work/60_patches/effective_0.2.3/scripts/core/enemy.gd
+index bec9cad..da632a1 100644
+--- a/work/60_patches/effective_0.2.3/scripts/core/enemy.gd
++++ b/work/60_patches/effective_0.2.3/scripts/core/enemy.gd
+@@ -207,6 +207,15 @@ func _init() -> void :
+ 
+ 
+ 
++# [MOD] ceiling for the time-in-round scaling curve (see Enemy.setup): at most 3x the monster table
++# HP/damage from the round clock. Tower-floor and hell-level growth are separate and stay as designed.
++const MOD_TIME_SCALE_CAP: = 3.0
++# [MOD] one-shot proof that this (patch-layer) script is the one the running process loaded.
++# Enemy.setup() fires on every spawn in every mode, so the probe lands within seconds of a run start.
++const MOD_TAG: = "mod-v4 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6]"
++static var mod_probe_done: = false
++static var mod_probe_spawns: = 0
++static var mod_clock_capped: = 0
+ const NO_RANGED: = {}
+ var _ranged: Dictionary = NO_RANGED
+ 
+@@ -224,7 +233,28 @@ var _touch_wait: = {}
+ func setup(p_id: String, hp_scale: float, renderer: MobRenderer = null, time_scale: = -1.0, own_sprite: = false) -> void :
+ 	if time_scale < 0.0:
+ 		time_scale = hp_scale
++	# [MOD] cap the time-in-round curve only (scale_hp = 1 + t/150 reaches 9.9x at 20 min, and on tower
++	# floors scale_time() = 5 s per floor so it is already at 9.9x around floor 267). hp_scale also
++	# carries the danger/hell/coop/karma multipliers, so those are kept: the excess time factor is
++	# divided out instead of clamping the whole product, and the same cap then bounds contact damage.
++	if time_scale > MOD_TIME_SCALE_CAP:
++		hp_scale /= time_scale / MOD_TIME_SCALE_CAP
++		time_scale = MOD_TIME_SCALE_CAP
++		mod_clock_capped += 1
+ 	id = p_id
++	# [MOD] mount + effect probe: Enemy.setup() runs for every spawn in every mode, so the file appears
++	# a second after a run starts, and is rewritten every 512 spawns with the running counters.
++	mod_probe_spawns += 1
++	if not mod_probe_done or mod_probe_spawns % 512 == 0:
++		mod_probe_done = true
++		print("MODPROBE enemy.gd mounted: %s pid=%d spawns=%d clock_capped=%d" % [
++			MOD_TAG, OS.get_process_id(), mod_probe_spawns, mod_clock_capped])
++		var mf: = FileAccess.open("user://mod_probe_enemy.txt", FileAccess.WRITE)
++		if mf != null:
++			mf.store_string("%s\nmonster=%s\nspawns=%d\nclock_capped=%d (%.1f%%)\npid=%d\nat=%s\n" % [
++				MOD_TAG, p_id, mod_probe_spawns, mod_clock_capped, 100.0 * mod_clock_capped / mod_probe_spawns,
++				OS.get_process_id(), Time.get_datetime_string_from_system()])
++			mf.close()
+ 	def = GameData.MONSTERS[id]
+ 	cc_dr = {}
+ 
+diff --git a/work/60_patches/effective_0.2.3/scripts/core/player.gd b/work/60_patches/effective_0.2.3/scripts/core/player.gd
+index c6ee18d..b2a3386 100644
+--- a/work/60_patches/effective_0.2.3/scripts/core/player.gd
++++ b/work/60_patches/effective_0.2.3/scripts/core/player.gd
+@@ -1,6 +1,27 @@
+ class_name Player
+ extends Node3D
+ 
++# [MOD] Ceiling for "Mechanics" damage - the damage-report row that groups every pierce hit with no
++# enemy behind it (hell rain, meteors, heralds, shadow-MVP mechanics, storm, Niflheim fog, Marca del
++# Apocalipsis, corrupt burst, tower hazards). Those hits scale with OUR max HP and skip armour, VIT,
++# Guard at full rate and the "Aguanta" one-hit save, so at ~1M HP a meteor landed 514k (0.18 pct x 3.0
++# stillness stack). See work/60_patches/PATCH_SYSTEM.md §7/§11.
++const MOD_MECH_PCT_CAP: = 0.15
++# hits bigger than 4x max HP are the game's own executions (main.gd tour/debug kills use 1e9..1e12)
++const MOD_MECH_EXECUTE_OVER: = 4.0
++const MOD_TAG: = "mod-v4 mechanics_cap=0.15 clock_cap=3.0 choice_w=[52,27,15,6]"
++static var mod_mech_hits: = 0
++static var mod_mech_capped: = 0
++static var mod_mech_saved: = 0.0
++static var mod_mech_worst: = 0.0
++# [MOD] Level-up rarity weights, replacing GameData.CHOICE_RARITY w = [70, 22, 7, 1] (sum 100 -> a
++# Legendaria offer is 1.0% at 0 luck, 2.7% at the luck ceiling). Probabilities are w[i]/sum(w), so
++# these give 52% / 27% / 15% / 6.0% = 6x the shipped legendary rate. steps (levels granted) and the
++# all_stats bonus still come from the shipped table, and luck still shifts weight out of Comun.
++const MOD_CHOICE_W: = [52.0, 27.0, 15.0, 6.0]
++static var mod_choice_n: = [0, 0, 0, 0]
++static var mod_choice_rolls: = 0
++
+ 
+ signal leveled_up
+ signal died
+@@ -3559,6 +3580,29 @@ func take_damage(amount: float, world: World, from: Enemy = null, pierce: = fals
+ 		amount = maxf(1.0, amount * (1.0 - damage_reduction()) * (1.0 - vit_cut))
+ 
+ 
++	# [MOD] apply the ceiling after all mitigation, before shields absorb, so the number the meter and
++	# the run log show is the one that can actually kill. The probe reports every mechanics hit at first
++	# and then every 8th, with running totals, so the file also proves the cap is engaging (or that the
++	# hits were already below it).
++	if pierce and from == null and amount < max_hp * MOD_MECH_EXECUTE_OVER:
++		var raw: = amount
++		var ceiling: = max_hp * MOD_MECH_PCT_CAP
++		if raw > ceiling:
++			mod_mech_capped += 1
++			mod_mech_saved += raw - ceiling
++			mod_mech_worst = maxf(mod_mech_worst, raw)
++			amount = ceiling
++		mod_mech_hits += 1
++		if mod_mech_hits == 1 or mod_mech_hits % 8 == 0:
++			print("MODPROBE %s mechanics hit #%d '%s': %.0f -> %.0f of max_hp %.0f (was %.2f, cap %.2f) | capped %d, avoided %.0f" % [
++				MOD_TAG, mod_mech_hits, what, raw, amount, max_hp, raw / max_hp, MOD_MECH_PCT_CAP, mod_mech_capped, 
++				mod_mech_saved])
++			var mf: = FileAccess.open("user://mod_probe_player.txt", FileAccess.WRITE)
++			if mf != null:
++				mf.store_string("%s\nhits=%d\ncapped=%d\navoided_total=%.0f\nworst_hit=%.0f (%.2f of max_hp)\nlast_label=%s\nlast_hit=%.0f -> %.0f\nmax_hp=%.0f\npid=%d\nat=%s\n" % [
++					MOD_TAG, mod_mech_hits, mod_mech_capped, mod_mech_saved, mod_mech_worst, mod_mech_worst / max_hp,
++					what, raw, amount, max_hp, OS.get_process_id(), Time.get_datetime_string_from_system()])
++				mf.close()
+ 	if not touch and not hazard and effects.has("hit_shield") and world.clock >= _gryphon_at:
+ 
+ 		_gryphon_at = world.clock + GameData.GRYPHON_GUARD_CD
+@@ -5156,6 +5200,11 @@ func _roll_rarity(o: Dictionary) -> void :
+ 	var w: Array[float] = []
+ 	for t in table:
+ 		w.append(float(t.w))
++	# [MOD] swap the rarity weights (the roll below, the luck shift and the tier->steps/all_stats lookup
++	# all keep using the shipped table, so nothing else about the offer changes)
++	if MOD_CHOICE_W.size() == w.size():
++		for i in w.size():
++			w[i] = float(MOD_CHOICE_W[i])
+ 	var shift: = minf(w[0] - 20.0, GameData.CHOICE_LUK_SHIFT * eff_stat("luk"))
+ 	w[0] -= shift
+ 	for i in range(1, w.size()):
+@@ -5175,6 +5224,19 @@ func _roll_rarity(o: Dictionary) -> void :
+ 	if o.kind == "stat":
+ 		steps = mini(steps, GameData.STAT_HARD_CAP - cur)
+ 	o["rarity"] = tier
++	# [MOD] measured odds from the real run, so "is it working?" is a number and not a feeling:
++	# user://mod_probe_choices.txt (also printed) shows the distribution over every roll so far.
++	mod_choice_n[tier] += 1
++	mod_choice_rolls += 1
++	if mod_choice_rolls % 64 == 1:
++		var txt: = "rolls=%d  Comun=%d  Rara=%d  Epica=%d  Legendaria=%d  P(legend)=%.1f%%  weights=%s" % [
++			mod_choice_rolls, mod_choice_n[0], mod_choice_n[1], mod_choice_n[2], mod_choice_n[3], 
++			100.0 * mod_choice_n[3] / mod_choice_rolls, str(MOD_CHOICE_W)]
++		print("MODPROBE choices: ", txt)
++		var cf: = FileAccess.open("user://mod_probe_choices.txt", FileAccess.WRITE)
++		if cf != null:
++			cf.store_string(txt + "\nat=" + Time.get_datetime_string_from_system() + "\n")
++			cf.close()
+ 	o["from"] = cur
+ 	o["level"] = cur + steps
+ 
+diff --git a/work/60_patches/effective_0.2.3/scripts/core/tower_events.gd b/work/60_patches/effective_0.2.3/scripts/core/tower_events.gd
+index 73e24a8..8e3467c 100644
+--- a/work/60_patches/effective_0.2.3/scripts/core/tower_events.gd
++++ b/work/60_patches/effective_0.2.3/scripts/core/tower_events.gd
+@@ -480,18 +480,54 @@ func _tick_wheel(delta: float) -> void :
+ 
+ 
+ 
++# [MOD] The wheel is 4 spins per event and 33.7% of the rim is curses - Filo mellado (-20% dao),
++# Carne fragil (-20% vida), Pies de plomo (-15% mov), Mente nublada (+25% recarga) at w=8 each, while
++# the single super slot (dmg +50%, hp +40%, aspd +25%, move +15%, permanent) sits at 3/95 = 3.2%.
++# Re-weighted by id: buffs 12 -> 18, super 3 -> 36 (12x), curses 8 -> 0.5. Curses keep their shipped
++# meaning (they expire after `floors` floors), they just became noise. Sum 128 -> per spin:
++# super 28.1%, each buff 14.1%, each curse 0.39% (any curse 1.6%, was 33.7%).
++const MOD_WHEEL_W: = {"fury": 18.0, "iron": 18.0, "swift": 18.0, "luck": 18.0, "wind": 18.0, 
++	"super": 36.0, "curse_dull": 0.5, "curse_frail": 0.5, "curse_heavy": 0.5, "curse_slow": 0.5}
++static var mod_wheel_n: = {}
++static var mod_wheel_rolls: = 0
++
++
++func _wheel_w(e: Dictionary) -> float:
++	return float(MOD_WHEEL_W.get(str(e.id), float(e.w)))
++
++
+ func _wheel_pick() -> String:
+ 	var total: = 0.0
+ 	for e in GameData.TOWER_WHEEL:
+-		total += float(e.w)
++		total += _wheel_w(e)
+ 	var r: = randf() * total
+ 	for e in GameData.TOWER_WHEEL:
+-		r -= float(e.w)
++		r -= _wheel_w(e)
+ 		if r <= 0.0:
+-			return str(e.id)
++			return _wheel_note(str(e.id))
+ 	return str(GameData.TOWER_WHEEL[0].id)
+ 
+ 
++# [MOD] measured rim statistics -> user://mod_probe_wheel.txt (also printed), so the new odds are
++# verifiable from your own spins instead of from the comment above.
++func _wheel_note(id: String) -> String:
++	mod_wheel_rolls += 1
++	mod_wheel_n[id] = int(mod_wheel_n.get(id, 0)) + 1
++	if mod_wheel_rolls % 4 == 1:
++		var s: = "spins=%d  super=%d (P=%.1f%%) " % [mod_wheel_rolls, int(mod_wheel_n.get("super", 0)), 
++			100.0 * int(mod_wheel_n.get("super", 0)) / mod_wheel_rolls]
++		for k in mod_wheel_n.keys():
++			if str(k) == "super":
++				continue
++			s += "%s=%d " % [k, mod_wheel_n[k]]
++		print("MODPROBE wheel: ", s)
++		var f: = FileAccess.open("user://mod_probe_wheel.txt", FileAccess.WRITE)
++		if f != null:
++			f.store_string(s + "\nat=" + Time.get_datetime_string_from_system() + "\n")
++			f.close()
++	return id
++
++
+ 
+ func _wheel_show(id: String) -> void :
+ 	var e: Dictionary = tower.wheel_entry(id)
+diff --git a/work/60_patches/effective_0.2.3/scripts/core/tower_run.gd b/work/60_patches/effective_0.2.3/scripts/core/tower_run.gd
+index fec449b..82bc79b 100644
+--- a/work/60_patches/effective_0.2.3/scripts/core/tower_run.gd
++++ b/work/60_patches/effective_0.2.3/scripts/core/tower_run.gd
+@@ -1,6 +1,12 @@
+ class_name TowerRun
+ extends Node
+ 
++# [MOD] Endless Tower nerf: floor index used for enemy HP/damage growth is clamped, so the exponential
++# 1.06^floor (HP) / 1.035^floor (damage) stops compounding past MOD_TOWER_FLOOR_CAP while the hero keeps
++# growing at TOWER_FLOOR_DMG. Hel floors reach eff() = 100 + 5*floor, which is what made floor ~200
++# absurd; the clamp flattens that whole tail. Speed growth is deliberately left untouched.
++const MOD_TOWER_FLOOR_CAP: = 90.0
++
+ 
+ 
+ 
+@@ -907,16 +913,17 @@ func hero_mult() -> float:
+ 
+ func scale_enemy(e: Enemy) -> void :
+ 	var f: = eff() - 1
++	var fg: = minf(MOD_TOWER_FLOOR_CAP, float(f))
+ 	var mvp: bool = e.def.get("mvp", false)
+ 	var r: = _rule()
+-	var growth: = pow(GameData.TOWER_MVP_HP_STEP if mvp else GameData.TOWER_HP_STEP, f)
++	var growth: = pow(GameData.TOWER_MVP_HP_STEP if mvp else GameData.TOWER_HP_STEP, fg)
+ 
+ 
+ 
+ 	var untrim: = 1.0 / GameData.HELL_HP_TRIM if GameData.hell_level(world.danger) >= GameData.HELL_HP_TRIM_FROM else 1.0
+ 	e.max_hp *= growth * untrim * (1.0 if mvp else float(r.get("hp", 1.0)))
+ 	e.hp = e.max_hp
+-	e.damage *= pow(GameData.TOWER_MVP_DMG_STEP if mvp else GameData.TOWER_DMG_STEP, f) * (1.0 if mvp else float(r.get("dmg", 1.0)))
++	e.damage *= pow(GameData.TOWER_MVP_DMG_STEP if mvp else GameData.TOWER_DMG_STEP, fg) * (1.0 if mvp else float(r.get("dmg", 1.0)))
+ 	e.speed *= (1.0 + minf(GameData.TOWER_SPEED_MAX, GameData.TOWER_SPEED_STEP * f) + GameData.TOWER_CYCLE_SPEED * cycle_of(floor))\
+ 	* (1.0 if mvp else float(r.get("speed", 1.0)))
+ 	if r.has("scale") and not mvp and e.visual is Node3D:
+diff --git a/work/60_patches/effective_0.2.3/scripts/core/tower_traps.gd b/work/60_patches/effective_0.2.3/scripts/core/tower_traps.gd
+index ddc02ac..0a8aca4 100644
+--- a/work/60_patches/effective_0.2.3/scripts/core/tower_traps.gd
++++ b/work/60_patches/effective_0.2.3/scripts/core/tower_traps.gd
+@@ -7,6 +7,16 @@ extends RefCounted
+ 
+ const DODGE_HEAL: = 0.02
+ 
++# [MOD] Endless Tower hazard nerf (see work/60_patches/PATCH_SYSTEM.md §7): hard ceiling on the share
++# of max HP a tower hazard takes per hit, on the fastest cadence, and on how many hazards may land at
++# once. Clamped again in every leaf below so no caller can bypass it.
++const MOD_TRAP_PCT_CAP: = 0.1
++const MOD_TRAP_EVERY_MIN: = 4.0
++const MOD_TRAP_MAX: = 2
++# [MOD] this file is not a member of patch_0.2.3.pck at all (it ships in the 0.2.0 bridge), so its
++# presence in the top pack is the thing worth proving: the probe reports the clamped pct it will use.
++static var mod_traps_probe: = false
++
+ var world: World
+ var _t: = 4.0
+ var _said: = 0
+@@ -35,6 +45,7 @@ func tick(delta: float, at_floor: int) -> void :
+ 	var every: = maxf(GameData.TOWER_TRAP_EVERY_MIN, GameData.TOWER_TRAP_EVERY - up * GameData.TOWER_TRAP_EVERY_STEP)
+ 	if past > 0:
+ 		every = maxf(GameData.TOWER_PAST_TRAP_EVERY_MIN, every - past * GameData.TOWER_PAST_TRAP_EVERY_STEP)
++	every = maxf(MOD_TRAP_EVERY_MIN, every)
+ 	_t = every * randf_range(0.85, 1.15)
+ 	var kinds: Array = []
+ 	for k in GameData.TOWER_TRAPS:
+@@ -46,8 +57,17 @@ func tick(delta: float, at_floor: int) -> void :
+ 	var pct: = minf(GameData.TOWER_TRAP_PCT_MAX, GameData.TOWER_TRAP_PCT + up * GameData.TOWER_TRAP_PCT_STEP)
+ 	if past > 0:
+ 		pct = minf(GameData.TOWER_PAST_TRAP_PCT_MAX, pct + past * GameData.TOWER_PAST_TRAP_PCT_STEP)
++	pct = minf(MOD_TRAP_PCT_CAP, pct)
++	if not mod_traps_probe:
++		mod_traps_probe = true
++		print("MODPROBE tower_traps.gd mounted: floor=%d pct clamped to %.2f (stock cap 0.30), every>=%.1fs, max %d at once, pid=%d" % [
++			at_floor, pct, MOD_TRAP_EVERY_MIN, MOD_TRAP_MAX, OS.get_process_id()])
++		var mf: = FileAccess.open("user://mod_probe_traps.txt", FileAccess.WRITE)
++		if mf != null:
++			mf.store_string("floor=%d\npct=%.3f\npid=%d\nat=%s\n" % [at_floor, pct, OS.get_process_id(), Time.get_datetime_string_from_system()])
++			mf.close()
+ 	var cast: = maxf(0.9, 1.35 - up * 0.004)
+-	var many: = 1 + int(at_floor >= GameData.TOWER_PAST_DOUBLE) + int(at_floor >= GameData.TOWER_PAST_TRIPLE)
++	var many: = mini(MOD_TRAP_MAX, 1 + int(at_floor >= GameData.TOWER_PAST_DOUBLE) + int(at_floor >= GameData.TOWER_PAST_TRIPLE))
+ 
+ 
+ 	var picked: Array = []
+@@ -91,6 +111,7 @@ func survive_strike(hero: Player, stage: float, pct: float, center: Vector3, rad
+ 
+ 
+ func _refuge(center: Vector3, radius: float, pct: float, cast: float) -> void :
++	pct = minf(MOD_TRAP_PCT_CAP, pct)
+ 	var size: = 2.2
+ 	var a: = randf() * TAU
+ 	var spot: = center + Vector3(cos(a), 0, sin(a)) * radius * randf_range(0.3, 0.65)
+@@ -132,6 +153,7 @@ func _hero() -> Player:
+ 
+ 
+ func _bolts(hero: Player, count: int, pct: float, cast: float) -> void :
++	pct = minf(MOD_TRAP_PCT_CAP, pct)
+ 	var spots: Array = [hero.position]
+ 	for i in count - 1:
+ 		var p: = world.map.find_point_around(hero.position, 2.0, 5.0)
+@@ -150,6 +172,7 @@ func _bolts(hero: Player, count: int, pct: float, cast: float) -> void :
+ 
+ 
+ func _beams(hero: Player, count: int, pct: float, cast: float) -> void :
++	pct = minf(MOD_TRAP_PCT_CAP, pct)
+ 	var base: = randf() * TAU
+ 	var length: = 18.0
+ 	var width: = 1.7
+@@ -184,6 +207,7 @@ func _beams(hero: Player, count: int, pct: float, cast: float) -> void :
+ 
+ 
+ func _spikes(hero: Player, pct: float, cast: float) -> void :
++	pct = minf(MOD_TRAP_PCT_CAP, pct)
+ 	var center: = hero.position
+ 	var turn: = randf() * TAU
+ 	var col: = Color(0.85, 0.6, 0.3)
+@@ -204,6 +228,7 @@ func _spikes(hero: Player, pct: float, cast: float) -> void :
+ 
+ 
+ func _boulder(hero: Player, pct: float, cast: float) -> void :
++	pct = minf(MOD_TRAP_PCT_CAP, pct)
+ 	var dir: = Vector3.FORWARD.rotated(Vector3.UP, randf() * TAU)
+ 	var length: = 20.0
+ 	var width: = 2.2

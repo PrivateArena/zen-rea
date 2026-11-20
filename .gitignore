@@ -23,7 +23,11 @@
 !/work/60_patches/
 /work/60_patches/*
 !/work/60_patches/PATCH_SYSTEM.md
+!/work/60_patches/build.sh
+!/work/60_patches/lint-allow.txt
+!/work/60_patches/mod-latest.patch
 !/work/60_patches/effective_0.2.3/
+!/work/60_patches/effective_0.2.4/
 # build/ and out/ under 60_patches are generated -> ignored
 
 # never track these, wherever they appear

@@ -1,0 +1,19 @@
+# Lines of the shipped source that the mod deliberately REPLACES (rewrites), one exact line per row,
+# tab-indented as in the decompiled source. build.sh refuses to build if any *other* source line
+# disappears from a patched file: that catches truncated patches (an edit whose match text covered only
+# part of a line, e.g. "extends Node" instead of "extends Node3D", which silently mangles two lines).
+# Everything the mod does otherwise must be pure insertion, reviewed by `./build.sh --diff`.
+#
+# Tag lines: the mod's own version strings, rewritten on each release. The values in them are written
+# as LITERALS, never as format placeholders - a placeholder inside a `const` string is not a format
+# string, and v2 shipped a literal "%.1f" into the game log because of it.
+const MOD_TAG: = "mod-v2 time_scale_cap=%.1f tower_floor_cap=90.0 trap_pct_cap=0.10 mechanics_pct_cap=0.15"
+const MOD_TAG: = "mod-v3 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15"
+const MOD_TAG: = "mod-v2"
+const MOD_TAG: = "mod-v3 mechanics cap=0.15"
+	var growth: = pow(GameData.TOWER_MVP_HP_STEP if mvp else GameData.TOWER_HP_STEP, f)
+	e.damage *= pow(GameData.TOWER_MVP_DMG_STEP if mvp else GameData.TOWER_DMG_STEP, f) * (1.0 if mvp else float(r.get("dmg", 1.0)))
+	var many: = 1 + int(at_floor >= GameData.TOWER_PAST_DOUBLE) + int(at_floor >= GameData.TOWER_PAST_TRIPLE)
+		total += float(e.w)
+		r -= float(e.w)
+			return str(e.id)
