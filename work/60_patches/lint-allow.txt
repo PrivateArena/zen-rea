@@ -25,3 +25,4 @@ const MOD_TAG: = "mod-v4 mechanics_cap=0.15 clock_cap=3.0 choice_w=[52,27,15,6]"
 		var lt: = t if i == 0 or randf() < GameData.POTENTIAL_SAME else maxi(1, t - 1)
 			line["p"] = randf() < GameData.POTENTIAL_PERFECT
 	if not e.summoned and not training and randf() < star_crumb_chance(e) * drop:
+const MOD_TAG: = "mod-v7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 pot_up=[30,18] pot_same=0.70 lock_cost=2"
