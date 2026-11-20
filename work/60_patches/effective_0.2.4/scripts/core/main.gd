@@ -262,6 +262,13 @@ func oath_mats() -> float:
 
 
 
+# [MOD] Star Crumb drop multiplier. One knob at the single roll site below, so it scales every source
+# uniformly: MVPs (3.5%), Hel tower, and the hell ladder (7.5e-5 + 4e-5 per hell level past 10 + 1.5e-5
+# per oath point => 0.0275% per kill at Hell 15 without oaths). Still multiplied by `drop` (the
+# drop-find bonus) and still 0 below Hell 10 / in festival mode, which is how the game gates the farm.
+const MOD_CRUMB_MULT: = 2.5
+
+
 func star_crumb_chance(e: Enemy) -> float:
 	if e.def.get("mvp", false):
 		return GameData.STAR_CRUMB_MVP
@@ -11682,7 +11689,7 @@ func _kill(e: Enemy) -> void :
 		titles.mvp_feats(self)
 
 
-	if not e.summoned and not training and randf() < star_crumb_chance(e) * drop:
+	if not e.summoned and not training and randf() < star_crumb_chance(e) * drop * MOD_CRUMB_MULT:
 		gain_material("star_crumb")
 		number(e.position + Vector3(0, 2.2, 0), tr("¡Star Crumb!"), GameData.POTENTIAL_TIERS[2].color, true)
 		Vfx.column(fx_root, e.position, Color(0.85, 0.8, 1.0))
