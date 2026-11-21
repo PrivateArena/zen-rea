@@ -761,3 +761,34 @@ World bosses (`WB_*`: `WB_TIME 180`, `WB_EVERY 0.65`, `WB_GROWTH 1.5`, `WB_DMG_G
 on the karma route) plus the new `UNIQUE_OWNED_MULT` when every hero already owns it, and
 `ALTAR_MAX` now counts only non-hypnotist waiting altars (`altars.gd:159`), which slightly raises real altar
 density — our `MOD_ALTAR_W` makes that more valuable, not more dangerous.
+
+## 20. The update pipeline, scripted (2026-11-21)
+
+Everything §10/§14/§19 did by hand is now four scripts + one shared env file, all in this directory and
+all git-tracked. They only touch `work/` and read `user://`/the game dir — the same rules as `play.sh`.
+
+| Script | Does | Refuses / warns |
+| --- | --- | --- |
+| `layer_env.sh` | sourced config: paths, `layer_ver` (state.json), `layer_tags`/`layer_prev`, `layer_rev` (GDSC header), `layer_magic`, the GDPC/GDEC magics | — |
+| `layer_sync.sh` | the 6 ingest steps: copy pack → `orig/`, member listing for `play.sh --layer`, extract `.gdc`, per-file decompile (parallel, `-P3`), assemble `effective_<ver>` from base ← bridge ← older patches ← newest, whitelist the tree in `.gitignore`, commit + tag `v<ver>-decompiled` | `GDEC` pack (encrypted download → §19.2), an existing tag/tree (would double-ingest; `--force` re-does but never moves a tag), a bytecode revision other than 101, a member that vanished vs the previous layer, non-text files in the tree, `.gdc`/`.uid` leftovers (deleted — the tree is source only) |
+| `layer_diff.sh` | pristine-vs-pristine report from the two tags: members, same/changed/new/gone scripts, churn **per file our mod edits**, every `GameData.*` const the mod reads, and whether every `lint-allow.txt` target line still exists | prints `MOVED/REWRITTEN` for a shipped line our knob was attached to — that line *is* the future conflict |
+| `mod_apply.sh` | `patch -p4 --merge` onto a tree, then three audits: conflict markers, **insertion-site check** (each indented `MOD_` statement's enclosing function vs the previous layer where the same knob was proven), lint pre-flight with the exact `lint-allow.txt` line to append | tree already modded (`--restore` backs the mod up to `work/logs/mod-backup-*.patch` first), exit **3** = needs hand resolution |
+| `update.sh` | `layer_sync` → `layer_diff` → `mod_apply --build` in one go; `--dry-run`, `--skip-sync`, `--install` | stops before installing on any conflict |
+
+The workflow for the next official update is therefore:
+
+```sh
+. /media/jang/home/PortableApp/re/activate.sh
+cd work/60_patches && ./update.sh --deep          # ingest + report + re-apply + build (no install)
+# if it stops with exit 3: open the marked file, keep the dev's new code, move the knob onto it, then
+./mod_apply.sh --check --build                    # audits + build again
+../../play.sh && ../../play.sh --probe            # human: play, then read the probe files
+./update.sh --skip-sync --install                 # only after the play-test
+```
+
+Self-test on the current state (2026-11-21, no side effects): `mod_apply.sh` run against a scratch copy
+of `v0.2.7-decompiled` applied `mod-latest.patch` with **0 conflicts, 0 moved sites, 0 lint gaps** and
+produced a tree byte-identical to the one the installed pack was built from — so `mod-latest.patch` is
+now stated in terms of 0.2.7 code, and the reports reproduce the hand analysis of §19 exactly
+(`110 same / 61 changed / 4 new`, `9 of 11 patched scripts moved`, `+104 -0` members, the one rewritten
+`lint-allow` line).

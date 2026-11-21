@@ -34,7 +34,7 @@ telemetry/leaderboard/cloud-save/update-manifest only. Consequence: `Rizin/Cutte
 | `work/10_evidence/` | 2 REA inventory bundles (45 MB each) |
 | `work/25_scripts/` | scripts-only recovery — the fast place to grep/read GDScript |
 | `work/30_recovered/` | full recovered project, 2.0 GB, 26,746 files (the only copy since `40_mod` was deleted 2026-11-19) |
-| `work/60_patches/` | **the live patch layer + all mod work.** `PATCH_SYSTEM.md` = findings (§7 balance map, §10 update behaviour, §14 + §19 = migration runbooks, proven twice). `effective_0.2.7/` = the 175 `.gd` tree the game really runs (git-tracked source; `effective_0.2.3/`, `effective_0.2.4/` kept as history). `build.sh` = compile→pack→verify→install (version from `state.json`), `lint-allow.txt` = intentionally-replaced shipped lines, `mod-latest.patch` / `mod-0.2.7.patch`, `orig/` = **the only pristine pack backups** (`patch_0.2.3/0.2.4/0.2.5/0.2.7.pck`) |
+| `work/60_patches/` | **the live patch layer + all mod work.** `PATCH_SYSTEM.md` = findings (§7 balance map, §10 update behaviour, §14 + §19 = migrations, §20 = the scripted pipeline). `effective_0.2.7/` = the 175 `.gd` tree the game really runs (git-tracked source; `effective_0.2.3/`, `effective_0.2.4/` kept as history). `update.sh` = one command after an official patch (`layer_sync.sh` ingest+tag → `layer_diff.sh` report → `mod_apply.sh` re-apply+audit), `build.sh` = compile→pack→verify→install (version from `state.json`), `lint-allow.txt` = intentionally-replaced shipped lines, `mod-latest.patch` / `mod-0.2.7.patch`, `orig/` = **the only pristine pack backups** (`patch_0.2.3/0.2.4/0.2.5/0.2.7.pck`) |
 | `work/50_roundtrip/` | write-path sandbox; `REPORT.md` = the verified patch recipe; `launch_test/` = ready-to-run fixture |
 | `work/logs/` | `pck-files.txt`, `verify.baseline.json`, per-run logs |
 | `PROJECT_OVERVIEW.md` (env) · `work/README.md` (dir map) | boot reading |
@@ -44,6 +44,10 @@ Key numbers: env 830 MB on nvme; work 2.8 GB on `/media/jang/free` (6.2 GB free 
 `pi mcp list` → `rea: connected, 255 tools`.
 
 ## Next step (in order)
+
+0. **On any official update**: `cd work/60_patches && ./update.sh --deep` (§20) — it ingests, reports what
+   moved, re-applies the mod and builds; it **stops with exit 3** on a conflict instead of shipping one.
+   Install only after a play-test: `./update.sh --skip-sync --install`.
 
 1. **Play-test mod v12 on 0.2.7** *(human — `./play.sh`, no args after `--`)*: altar mix (96.8 % useful),
    Star Crumb rate with the new fused `_hits()` roll + Golden Poring source, then `./play.sh --probe`
@@ -94,12 +98,20 @@ step completes.
 git log --oneline | head -1                # 26e3727 unless you committed something
 git status --porcelain | wc -l             # expect 0 between steps
 git diff --stat v0.2.7-decompiled -- work/60_patches/effective_0.2.7   # = the mod
+cd work/60_patches && ./update.sh --dry-run      # what the next official patch would do (§20)
 ```
 
 ## Log
 
-**2026-11-21 (latest)** — **Official update 0.2.4 → 0.2.7 handled (mod reinstalled as v12, pack
-`c632e8c42475eca2…`)** — second live run of the §10/§14 recipe, full write-up **§19**. Updater deleted our
+**2026-11-21 (latest)** — **Update pipeline scripted (§20)**: `work/60_patches/{update,layer_sync,layer_diff,mod_apply}.sh`
++ `layer_env.sh`, git-tracked. `./update.sh --deep` now does ingest→report→re-apply→build; guards for GDEC
+(encrypted) packs, unknown bytecode rev, re-ingest, already-modded tree; `mod_apply.sh` audits that every
+`MOD_` knob landed in the same function as in the previous layer (exit 3 = hand resolution needed). Verified
+by re-applying onto a scratch copy of `v0.2.7-decompiled`: 0 conflicts / 0 moved sites / 0 lint gaps, tree
+byte-identical to the one the installed pack came from. Trees also cleaned of stray `.gdc`/`.gd.uid`.
+
+**2026-11-21** — **Official update 0.2.4 → 0.2.7 handled (mod reinstalled as v12, pack
+`c632e8c42475eca2…`)** — second live run of the §10/§14 recipe, full write-up §19. Updater deleted our
 modded pack again; decompiled 101/101 scripts of `patch_0.2.7.pck` (rev 101, unchanged) →
 `effective_0.2.7/` (175 `.gd`, 4 new: `wb_portal`/`world_boss`/`world_chat`/`harmony_view`), tagged
 `v0.2.7-decompiled`; `mod-latest.patch` applied with **1 conflict** — the dev rewrote the Star Crumb roll to
