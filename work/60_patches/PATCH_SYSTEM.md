@@ -737,6 +737,9 @@ pool 45.2 % → 96.8 %, Baldur/Hel 75/25, unchanged by the update. Built pack **
 
 ### 19.2 `orig/patch_0.2.5.pck` is not a pack — packs travel encrypted
 
+The symptom that caught it: `./play.sh --layer <member>` printed nothing for `PATCH` on 0.2.5, because
+`work/logs/patch-0.2.5-files.txt` is 0 bytes. Regenerate that listing per version with
+`gdre_tools --list-files=orig/patch_$VER.pck > work/logs/patch-$VER-files.txt`.
 `orig/patch_0.2.5.pck` (copied 2026-11-20 from the live dir) opens in nothing: magic `GDEC`, no `res://`
 strings, GDRE reports `Pack version unsupported: 4246140305`. Cause found in this layer: the dev ships the
 download **encrypted** and decrypts it on disk — `updater.gd:393` calls `_decrypt()` →
