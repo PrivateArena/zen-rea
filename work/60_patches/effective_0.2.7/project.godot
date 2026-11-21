@@ -1,0 +1,110 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Midgard Survivors"
+config/description="Survivors-like inspirado en Ragnarok Online."
+config/version="0.1.273"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+boot_splash/bg_color=Color(0, 0, 0, 1)
+boot_splash/image="res://assets/ro/ui/loading/splash.png"
+config/icon="res://assets/ro/ui/icon.png"
+config/windows_native_icon="res://assets/ro/ui/icon.ico"
+
+[autoload]
+
+Updater="*res://scripts/autoload/updater.gd"
+GameData="*res://scripts/autoload/game_data.gd"
+RoAssets="*res://scripts/autoload/ro_assets.gd"
+Save="*res://scripts/autoload/save.gd"
+EOSGRuntime="*res://addons/epic-online-services-godot/runtime.gd"
+HPlatform="*res://addons/epic-online-services-godot/heos/hplatform.gd"
+HAuth="*res://addons/epic-online-services-godot/heos/hauth.gd"
+HAchievements="*res://addons/epic-online-services-godot/heos/hachievements.gd"
+HFriends="*res://addons/epic-online-services-godot/heos/hfriends.gd"
+HStats="*res://addons/epic-online-services-godot/heos/hstats.gd"
+HLeaderboards="*res://addons/epic-online-services-godot/heos/hleaderboards.gd"
+HLobbies="*res://addons/epic-online-services-godot/heos/hlobbies.gd"
+HP2P="*res://addons/epic-online-services-godot/heos/hp2p.gd"
+HSessions="*res://addons/epic-online-services-godot/heos/hsessions.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[editor_overrides]
+
+text_editor/behavior/indent/type=0
+text_editor/behavior/indent/size=4
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/epic-online-services-godot/plugin.cfg")
+
+[internationalization]
+
+locale/translation_remaps={
+"res://assets/ro/ui/skin/basic_interface/btn_friend_off.png": PackedStringArray("res://assets/ro/ui/locale/en/basic_interface/btn_friend_off.png:en", "res://assets/ro/ui/locale/pt/basic_interface/btn_friend_off.png:pt"),
+"res://assets/ro/ui/skin/basic_interface/btn_friend_on.png": PackedStringArray("res://assets/ro/ui/locale/en/basic_interface/btn_friend_on.png:en", "res://assets/ro/ui/locale/pt/basic_interface/btn_friend_on.png:pt"),
+"res://assets/ro/ui/skin/basic_interface/btn_items_off.png": PackedStringArray("res://assets/ro/ui/locale/en/basic_interface/btn_items_off.png:en", "res://assets/ro/ui/locale/pt/basic_interface/btn_items_off.png:pt"),
+"res://assets/ro/ui/skin/basic_interface/btn_items_on.png": PackedStringArray("res://assets/ro/ui/locale/en/basic_interface/btn_items_on.png:en", "res://assets/ro/ui/locale/pt/basic_interface/btn_items_on.png:pt"),
+"res://assets/ro/ui/skin/basic_interface/btn_map_off.png": PackedStringArray("res://assets/ro/ui/locale/en/basic_interface/btn_map_off.png:en"),
+"res://assets/ro/ui/skin/basic_interface/btn_map_on.png": PackedStringArray("res://assets/ro/ui/locale/en/basic_interface/btn_map_on.png:en"),
+"res://assets/ro/ui/skin/basic_interface/btn_skill_off.png": PackedStringArray("res://assets/ro/ui/locale/en/basic_interface/btn_skill_off.png:en"),
+"res://assets/ro/ui/skin/basic_interface/btn_skill_on.png": PackedStringArray("res://assets/ro/ui/locale/en/basic_interface/btn_skill_on.png:en"),
+"res://assets/ro/ui/skin/basic_interface/btn_status_off.png": PackedStringArray("res://assets/ro/ui/locale/en/basic_interface/btn_status_off.png:en"),
+"res://assets/ro/ui/skin/basic_interface/btn_status_on.png": PackedStringArray("res://assets/ro/ui/locale/en/basic_interface/btn_status_on.png:en"),
+"res://assets/ro/ui/skin/login_interface/box_select.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/box_select.png:en", "res://assets/ro/ui/locale/pt/login_interface/box_select.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_album.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_album.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_album.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_back.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_back.png:en"),
+"res://assets/ro/ui/skin/login_interface/btn_cancel.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_cancel.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_cancel.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_connect.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_connect.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_connect.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_connect_a.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_connect_a.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_connect_a.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_connect_b.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_connect_b.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_connect_b.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_exit.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_exit.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_exit.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_exit_a.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_exit_a.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_exit_a.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_exit_b.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_exit_b.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_exit_b.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_gear.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_gear.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_gear.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_hard.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_hard.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_hard.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_kafra.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_kafra.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_kafra.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_lang.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_lang.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_lang.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_lang_a.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_lang_a.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_lang_a.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_lang_b.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_lang_b.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_lang_b.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_make.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_make.png:en"),
+"res://assets/ro/ui/skin/login_interface/btn_next.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_next.png:en"),
+"res://assets/ro/ui/skin/login_interface/btn_pact.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_pact.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_pact.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_rebirth.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_rebirth.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_rebirth.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_sage.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_sage.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_sage.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_sound.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_sound.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_sound.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_sound_a.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_sound_a.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_sound_a.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_sound_b.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_sound_b.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_sound_b.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_speed.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_speed.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_speed.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_style.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_style.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_style.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_town.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_town.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_town.png:pt"),
+"res://assets/ro/ui/skin/login_interface/btn_unlock.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/btn_unlock.png:en", "res://assets/ro/ui/locale/pt/login_interface/btn_unlock.png:pt"),
+"res://assets/ro/ui/skin/login_interface/win_make.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/win_make.png:en", "res://assets/ro/ui/locale/pt/login_interface/win_make.png:pt"),
+"res://assets/ro/ui/skin/login_interface/win_select2.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/win_select2.png:en", "res://assets/ro/ui/locale/pt/login_interface/win_select2.png:pt"),
+"res://assets/ro/ui/skin/login_interface/win_service.png": PackedStringArray("res://assets/ro/ui/locale/en/login_interface/win_service.png:en", "res://assets/ro/ui/locale/pt/login_interface/win_service.png:pt")
+}
+locale/translations=PackedStringArray("res://locale/en.po", "res://locale/pt.po")
+locale/fallback="es"
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=0
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+anti_aliasing/quality/msaa_3d=1

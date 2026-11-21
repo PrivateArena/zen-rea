@@ -50,3 +50,4 @@ gdre_export.log
 # patch --merge leftovers must never be tracked
 *.gd.orig
 *.rej
+!/work/60_patches/effective_0.2.7/
