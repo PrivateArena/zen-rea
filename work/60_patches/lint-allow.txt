@@ -33,3 +33,5 @@ const MOD_TAG: = "mod-v10 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics
 		total += float(GameData.ALTARS[id].get("w", 1.0))
 		r -= float(GameData.ALTARS[id].get("w", 1.0))
 				world.altars.spawn(["baldur", "hel"].pick_random())
+	var crumbs: = 0 if e.summoned or training else _hits(star_crumb_chance(e) * drop, fused)
+		if not training and randf() < GameData.GOLD_PORING_CRUMB * drop:

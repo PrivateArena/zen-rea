@@ -210,6 +210,15 @@ func _init() -> void :
 
 
 
+# [MOD] ceiling for the time-in-round scaling curve (see Enemy.setup): at most 3x the monster table
+# HP/damage from the round clock. Tower-floor and hell-level growth are separate and stay as designed.
+const MOD_TIME_SCALE_CAP: = 3.0
+# [MOD] one-shot proof that this (patch-layer) script is the one the running process loaded.
+# Enemy.setup() fires on every spawn in every mode, so the probe lands within seconds of a run start.
+const MOD_TAG: = "mod-v12 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,0.2] karma_baldur=0.75"
+static var mod_probe_done: = false
+static var mod_probe_spawns: = 0
+static var mod_clock_capped: = 0
 const NO_RANGED: = {}
 var _ranged: Dictionary = NO_RANGED
 
@@ -227,7 +236,28 @@ var _touch_wait: = {}
 func setup(p_id: String, hp_scale: float, renderer: MobRenderer = null, time_scale: = -1.0, own_sprite: = false) -> void :
 	if time_scale < 0.0:
 		time_scale = hp_scale
+	# [MOD] cap the time-in-round curve only (scale_hp = 1 + t/150 reaches 9.9x at 20 min, and on tower
+	# floors scale_time() = 5 s per floor so it is already at 9.9x around floor 267). hp_scale also
+	# carries the danger/hell/coop/karma multipliers, so those are kept: the excess time factor is
+	# divided out instead of clamping the whole product, and the same cap then bounds contact damage.
+	if time_scale > MOD_TIME_SCALE_CAP:
+		hp_scale /= time_scale / MOD_TIME_SCALE_CAP
+		time_scale = MOD_TIME_SCALE_CAP
+		mod_clock_capped += 1
 	id = p_id
+	# [MOD] mount + effect probe: Enemy.setup() runs for every spawn in every mode, so the file appears
+	# a second after a run starts, and is rewritten every 512 spawns with the running counters.
+	mod_probe_spawns += 1
+	if not mod_probe_done or mod_probe_spawns % 512 == 0:
+		mod_probe_done = true
+		print("MODPROBE enemy.gd mounted: %s pid=%d spawns=%d clock_capped=%d" % [
+			MOD_TAG, OS.get_process_id(), mod_probe_spawns, mod_clock_capped])
+		var mf: = FileAccess.open("user://mod_probe_enemy.txt", FileAccess.WRITE)
+		if mf != null:
+			mf.store_string("%s\nmonster=%s\nspawns=%d\nclock_capped=%d (%.1f%%)\npid=%d\nat=%s\n" % [
+				MOD_TAG, p_id, mod_probe_spawns, mod_clock_capped, 100.0 * mod_clock_capped / mod_probe_spawns,
+				OS.get_process_id(), Time.get_datetime_string_from_system()])
+			mf.close()
 	def = GameData.MONSTERS[id]
 	cc_dr = {}
 

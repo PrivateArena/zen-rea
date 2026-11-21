@@ -684,3 +684,77 @@ Niflheim route). The nerfed four are the ones whose penalty multiplies with the 
 staying flat — and note the *good* side of niflheim/thor is what `MOD_XP_MULT` (§14.1) already covers.
 Tuning: the four good weights only need to stay ≫ the four bad ones; at 6.0/0.2 a run with
 `ALTAR_MAX = 5` concurrent altars effectively never sees a nerf altar.
+
+## 19. Update 0.2.4 -> 0.2.7, as executed (2026-11-21) — second live run of the §10/§14 recipe
+
+The updater took 0.2.5 → 0.2.6 → 0.2.7 in between, deleting every pack it replaced: `patches/` now holds
+only `bridge_0.1.273_to_0.2.0.pck` (unchanged), `patch_0.2.7.pck` and `state.json`. **Our modded
+`patch_0.2.4.pck` is gone**, exactly as §10 predicted; `orig/` was the only pristine copy and it was there.
+
+```sh
+cp "$P/patches/patch_0.2.7.pck" orig/                        # sha 0810d151e9c46b52…, 23 MB, 271 members
+gdre_tools --extract=orig/patch_0.2.7.pck --include='*.gdc' --output=raw_0.2.7          # 101 scripts
+# per-file decompile, bytecode rev read off the header first: 47 44 53 43 65 -> rev 101 -> 4.5.0-stable
+for g in $(find raw_0.2.7 -name '*.gdc'); do
+  gdre_tools --decompile="$PWD/$g" --bytecode=4.5.0-stable \
+             --output="$PWD/scripts_full_0.2.7/$(dirname ${g#raw_0.2.7/})"; done       # 101/101, 0 fail
+rm -rf effective_0.2.7 && mkdir -p effective_0.2.7 && cp effective_0.2.4/project.godot effective_0.2.7/
+for L in ../25_scripts scripts_full_0.2.0 scripts_full_0.2.4 scripts_full_0.2.7; do     # base<-bridge<-patch
+  for sub in scripts addons; do [ -d "$L/$sub" ] && cp -r "$L/$sub/." effective_0.2.7/"$sub"/; done
+done                                                                                   # 175 .gd, tag v0.2.7-decompiled
+cd effective_0.2.7 && patch -p4 --merge < ../mod-latest.patch   # 10 of 11 files clean, 1 conflict
+./build.sh --deep && ./build.sh --install
+```
+
+`patch_0.2.7.pck` is a superset of `patch_0.2.4.pck` (0 members dropped, 104 added) → the layer really is
+cumulative, so the tree is base ← bridge ← newest patch; the 0.2.4 decompile is only a floor.
+Survey, pristine 0.2.4 tree vs pristine 0.2.7 tree: **110 of 175 scripts byte-identical, 61 changed, 4 new**
+(`core/wb_portal`, `core/world_boss`, `net/world_chat`, `ui/harmony_view`).
+
+### 19.1 The one conflict, and what it says about the mod
+
+`main.gd` hunk #2 — the Star Crumb roll. The dev rewrote it from a single `randf()` into the fused-crowd
+form, so the knob had to move onto the new expression:
+
+```gdscript
+var crumbs: = 0 if e.summoned or training else _hits(star_crumb_chance(e) * drop * MOD_CRUMB_MULT, fused)
+```
+`_hits(p, n)` (`main.gd:13754`) is *n* independent rolls of *p*, one per packed monster under
+`CROWD_FUSE_MAX`, so multiplying the probability is the same knob as before and the Hell-10 gate is intact
+(`star_crumb_chance()` returns 0 → 0 hits). Same build also added a **fourth crumb source**, `GOLD_PORING_CRUMB
+= 0.05` (`main.gd:11995`, new in 0.2.7), which the old comment claimed to already cover — so `MOD_CRUMB_MULT`
+is now applied at both roll sites, and the comment says so. World-boss chests hand out crumbs as a fixed
+table amount (`GameData.wb_chest_items()`, `game_data.gd:378-386`, `WB_CHESTS`/`chest_wb_*`), which is a
+reward rather than a roll: left alone.
+Two more lines in `lint-allow.txt`; everything else in the mod is still pure insertion, and `potential.gd`
+was not touched by the dev at all (its `.gdc` sha is identical to the 0.2.4 build).
+
+Verification: lint green; `members 271 -> 272` (our added `tower_traps.gdc`), all 11 member shas match the
+compiled `.gdc`, no lost member; `--deep` round-trip now reports *every source line present in the bytecode*
+for all 11 files; altar odds re-measured off the new tree (`work/logs/altar_odds/odds_0.2.7.txt`): useful
+pool 45.2 % → 96.8 %, Baldur/Hel 75/25, unchanged by the update. Built pack **`c632e8c42475eca2…`**
+= `MOD_TAG mod-v12 on 0.2.7`, installed, `play.sh --status` → `MODIFIED_our_edit`.
+
+### 19.2 `orig/patch_0.2.5.pck` is not a pack — packs travel encrypted
+
+`orig/patch_0.2.5.pck` (copied 2026-11-20 from the live dir) opens in nothing: magic `GDEC`, no `res://`
+strings, GDRE reports `Pack version unsupported: 4246140305`. Cause found in this layer: the dev ships the
+download **encrypted** and decrypts it on disk — `updater.gd:393` calls `_decrypt()` →
+`FileAccess.open_encrypted_with_pass(from, READ, PATCH_KEY)` (key is a const in `updater.gd`), and
+`save.gd:207` recognises the same `GDEC` tag for cloud saves. So the 0.2.5 copy was captured *before*
+decryption (a downloaded-but-unmounted artifact), not a format change: 0.2.4 and 0.2.7 in `orig/` are plain
+`GDPC` v4 and both mount. **Rule for the next update: copy the pack from `user://patches/` only after the
+game has mounted it once** (decrypted), and if GDRE refuses to open it, look for a `GDEC` header before
+suspecting anti-tamper — `updater.gd` is the authority and it has no hash check on on-disk packs (§3 stands).
+
+### 19.3 New in 0.2.7 (for future balance work)
+
+World bosses (`WB_*`: `WB_TIME 180`, `WB_EVERY 0.65`, `WB_GROWTH 1.5`, `WB_DMG_GROWTH 1.15`, 6 chest grades
+`wood…valhalla` granting `star_crumb` 1/2/3/6/11/15 × `WB_CHEST_MULT`), new maps `juperos_02`/`moc_pryd03`/
+`prt_are01`, a combo skill system (`COMBO_*`), `PRIDE_*`, `BURN_HEAT_*`, `RAGING_LINE_*`, `PLANT_CHAIN_*`,
+`REFLECT_OVER_SOFT`, `STEEL_GUARD_MAX`, `SUMMON_BOSS_DMG`/`SUMMON_LEECH_PER_S`/`SUMMON_OVERFLOW_POW`,
+`HELL_HIT_STEP`/`OATH_HIT_STEP` (more monster-side scaling), `ENDOW_*` (element endowment), world chat,
+`CROWD_FUSE_LOOT`. Balance nerfs we did not ask for: `KARMA_UNIQUE_CHANCE 0.06 → 0.017` (3.5× rarer unique
+on the karma route) plus the new `UNIQUE_OWNED_MULT` when every hero already owns it, and
+`ALTAR_MAX` now counts only non-hypnotist waiting altars (`altars.gd:159`), which slightly raises real altar
+density — our `MOD_ALTAR_W` makes that more valuable, not more dangerous.

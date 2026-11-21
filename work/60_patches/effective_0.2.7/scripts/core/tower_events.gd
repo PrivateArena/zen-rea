@@ -520,16 +520,52 @@ func _tick_wheel(delta: float) -> void :
 
 
 
+# [MOD] The wheel is 4 spins per event and 33.7% of the rim is curses - Filo mellado (-20% dao),
+# Carne fragil (-20% vida), Pies de plomo (-15% mov), Mente nublada (+25% recarga) at w=8 each, while
+# the single super slot (dmg +50%, hp +40%, aspd +25%, move +15%, permanent) sits at 3/95 = 3.2%.
+# Re-weighted by id: buffs 12 -> 18, super 3 -> 36 (12x), curses 8 -> 0.5. Curses keep their shipped
+# meaning (they expire after `floors` floors), they just became noise. Sum 128 -> per spin:
+# super 28.1%, each buff 14.1%, each curse 0.39% (any curse 1.6%, was 33.7%).
+const MOD_WHEEL_W: = {"fury": 18.0, "iron": 18.0, "swift": 18.0, "luck": 18.0, "wind": 18.0, 
+	"super": 36.0, "curse_dull": 0.5, "curse_frail": 0.5, "curse_heavy": 0.5, "curse_slow": 0.5}
+static var mod_wheel_n: = {}
+static var mod_wheel_rolls: = 0
+
+
+func _wheel_w(e: Dictionary) -> float:
+	return float(MOD_WHEEL_W.get(str(e.id), float(e.w)))
+
+
 func _wheel_pick() -> String:
 	var total: = 0.0
 	for e in GameData.TOWER_WHEEL:
-		total += float(e.w)
+		total += _wheel_w(e)
 	var r: = randf() * total
 	for e in GameData.TOWER_WHEEL:
-		r -= float(e.w)
+		r -= _wheel_w(e)
 		if r <= 0.0:
-			return str(e.id)
+			return _wheel_note(str(e.id))
 	return str(GameData.TOWER_WHEEL[0].id)
+
+
+# [MOD] measured rim statistics -> user://mod_probe_wheel.txt (also printed), so the new odds are
+# verifiable from your own spins instead of from the comment above.
+func _wheel_note(id: String) -> String:
+	mod_wheel_rolls += 1
+	mod_wheel_n[id] = int(mod_wheel_n.get(id, 0)) + 1
+	if mod_wheel_rolls % 4 == 1:
+		var s: = "spins=%d  super=%d (P=%.1f%%) " % [mod_wheel_rolls, int(mod_wheel_n.get("super", 0)), 
+			100.0 * int(mod_wheel_n.get("super", 0)) / mod_wheel_rolls]
+		for k in mod_wheel_n.keys():
+			if str(k) == "super":
+				continue
+			s += "%s=%d " % [k, mod_wheel_n[k]]
+		print("MODPROBE wheel: ", s)
+		var f: = FileAccess.open("user://mod_probe_wheel.txt", FileAccess.WRITE)
+		if f != null:
+			f.store_string(s + "\nat=" + Time.get_datetime_string_from_system() + "\n")
+			f.close()
+	return id
 
 
 

@@ -268,6 +268,17 @@ func oath_mats() -> float:
 
 
 
+# [MOD] Star Crumb drop multiplier. One knob at every crumb ROLL site, so it scales all sources
+# uniformly: MVPs (3.5%), Hel tower, the hell ladder (7.5e-5 + 4e-5 per hell level past 10 + 1.5e-5 per
+# oath point => 0.0275% per kill at Hell 15 without oaths), and - new in 0.2.7 - the Golden Poring roll
+# (GameData.GOLD_PORING_CRUMB 5%, main.gd:11995). Both sites are in World._kill and still multiplied by
+# `drop` (the drop-find bonus); the hell one is now `_hits(p, fused)` so a fused crowd rolls once per
+# packed monster, which the multiplier rides the same way. Still 0 below Hell 10 / in festival mode,
+# which is how the game gates the farm. NOT applied to the world-boss chest tables (a fixed
+# `star_crumb` amount per chest grade, GameData.wb_chest_items() game_data.gd:378-386) - reward, not roll.
+const MOD_CRUMB_MULT: = 2.5
+
+
 func star_crumb_chance(e: Enemy) -> float:
 	if e.def.get("mvp", false):
 		return GameData.STAR_CRUMB_MVP
@@ -11965,7 +11976,7 @@ func _kill(e: Enemy) -> void :
 		titles.mvp_feats(self)
 
 
-	var crumbs: = 0 if e.summoned or training else _hits(star_crumb_chance(e) * drop, fused)
+	var crumbs: = 0 if e.summoned or training else _hits(star_crumb_chance(e) * drop * MOD_CRUMB_MULT, fused)
 	if crumbs > 0:
 		for i in crumbs:
 			gain_material("star_crumb")
@@ -11985,7 +11996,7 @@ func _kill(e: Enemy) -> void :
 
 
 		_drop_ore(e.position, _mat_count(GameData.GOLD_PORING_ORES, mats))
-		if not training and randf() < GameData.GOLD_PORING_CRUMB * drop:
+		if not training and randf() < GameData.GOLD_PORING_CRUMB * drop * MOD_CRUMB_MULT:
 			gain_material("star_crumb")
 			number(e.position + Vector3(0, 2.6, 0), tr("¡Star Crumb!"), GameData.POTENTIAL_TIERS[2].color, true)
 		if not training and randf() < GameData.GOLD_PORING_COIN * drop:

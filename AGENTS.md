@@ -20,7 +20,7 @@ Architecture + as-built deltas: `ARCHITECTURE_PLAN_portable-rea-re-env.md` (§11
 | Engine | `Godot Engine v4.7.2.stable.official`; project version `0.1.273`; `.gdc` bytecode revision **101** (= GDRE token `4.5.0-stable` / commit `ebc36a7`) |
 | Scripts | 131 `.gdc` (+134 `.remap`) → **131 `.gd` recovered, 0 failures** |
 | `MidgardSurvivors.x86_64` | stock Godot 4.7.2 export template, stripped, no custom sections, no PCK/integrity/anti-cheat checks, aborts on `--main-pack`/`--path` (`disable_path_overrides=yes`) |
-| Live patch layer (`user://patches/`) | `state.json`: base `0.1.273`, bridge `0.2.0`, **`patch_0.2.4.pck`** (official sha `a1dd53eb…`, 167 members). Packs here are unsigned-on-disk and cumulative; each update **deletes** the pack it replaces |
+| Live patch layer (`user://patches/`) | `state.json`: base `0.1.273`, bridge `0.2.0`, **`patch_0.2.7.pck`** (official sha `0810d151…`, 271 members). Packs here are unsigned-on-disk and cumulative; each update **deletes** the pack it replaces. Downloads travel **encrypted** (`GDEC` + `PATCH_KEY`, `updater.gd _decrypt()`) and are decrypted on disk — §19.2 |
 | Native libs | `libeosg.linux.template_release.x86_64.so` (one `T`: `eosg_library_init`), `libEOSSDK-Linux-Shipping.so` — Epic EOS GDExtension, **optional by guard** `net_sync.gd:145-153` |
 
 **Verdict so far: no native RE needed.** All balance is client-side const tables; servers do
@@ -34,7 +34,7 @@ telemetry/leaderboard/cloud-save/update-manifest only. Consequence: `Rizin/Cutte
 | `work/10_evidence/` | 2 REA inventory bundles (45 MB each) |
 | `work/25_scripts/` | scripts-only recovery — the fast place to grep/read GDScript |
 | `work/30_recovered/` | full recovered project, 2.0 GB, 26,746 files (the only copy since `40_mod` was deleted 2026-11-19) |
-| `work/60_patches/` | **the live patch layer + all mod work.** `PATCH_SYSTEM.md` = findings (§7 balance map, §10 update behaviour, §14 = 0.2.4 migration runbook). `effective_0.2.4/` = the 171 `.gd` tree the game really runs (git-tracked source; `effective_0.2.3/` kept as history). `build.sh` = compile→pack→verify→install (version from `state.json`), `lint-allow.txt` = intentionally-replaced shipped lines, `mod-latest.patch` / `mod-0.2.4.patch`, `orig/` = **the only pristine pack backups** (`patch_0.2.3.pck`, `patch_0.2.4.pck`) |
+| `work/60_patches/` | **the live patch layer + all mod work.** `PATCH_SYSTEM.md` = findings (§7 balance map, §10 update behaviour, §14 + §19 = migration runbooks, proven twice). `effective_0.2.7/` = the 175 `.gd` tree the game really runs (git-tracked source; `effective_0.2.3/`, `effective_0.2.4/` kept as history). `build.sh` = compile→pack→verify→install (version from `state.json`), `lint-allow.txt` = intentionally-replaced shipped lines, `mod-latest.patch` / `mod-0.2.7.patch`, `orig/` = **the only pristine pack backups** (`patch_0.2.3/0.2.4/0.2.5/0.2.7.pck`) |
 | `work/50_roundtrip/` | write-path sandbox; `REPORT.md` = the verified patch recipe; `launch_test/` = ready-to-run fixture |
 | `work/logs/` | `pck-files.txt`, `verify.baseline.json`, per-run logs |
 | `PROJECT_OVERVIEW.md` (env) · `work/README.md` (dir map) | boot reading |
@@ -45,7 +45,9 @@ Key numbers: env 830 MB on nvme; work 2.8 GB on `/media/jang/free` (6.2 GB free 
 
 ## Next step (in order)
 
-1. **Play-test mod v6 on 0.2.4** *(human — `./play.sh`, no args after `--`)*: endgame HP/tower feel,
+1. **Play-test mod v12 on 0.2.7** *(human — `./play.sh`, no args after `--`)*: altar mix (96.8 % useful),
+   Star Crumb rate with the new fused `_hits()` roll + Golden Poring source, then `./play.sh --probe`
+   (probe files in `user://`) and retune the `MOD_*` constants.
    legendary frequency (≈1 in 10 offers), and the new `×1.5` XP (~+56 levels at the 40-min mark).
    Then `./play.sh --probe` (5 probe files in `user://`) and retune `MOD_*` constants → `./build.sh --deep --install`.
 2. **Runtime acceptance test of the base-pack write path** *(still pending, needs a human)*:
@@ -83,7 +85,7 @@ is why the round-trip marker test needs it, and why mod testing must NOT use it.
 Balance work happens in `work/60_patches/`: edit `effective_<ver>/`, build with GDRE into `out/`, ship
 into `user://patches/`. `40_mod` / `30_recovered` are read-only study trees. Version control is **one
 repo at the project root**, text-only (GitHub-ready); tags `v<ver>-decompiled` = pristine live builds,
-therefore `git diff v0.2.4-decompiled` **is** the mod. Never `git add -f` a `.pck`/`.gdc`. Never run
+therefore `git diff v0.2.7-decompiled` **is** the mod. Never `git add -f` a `.pck`/`.gdc`. Never run
 `rea setup`, `rea update`, `pi mcp add`, or bare `npm install` (skill §6). Recapture
 `work/logs/verify.baseline.json` only after a deliberate change. Add a dated entry below whenever a
 step completes.
@@ -91,12 +93,24 @@ step completes.
 ```sh
 git log --oneline | head -1                # 26e3727 unless you committed something
 git status --porcelain | wc -l             # expect 0 between steps
-git diff --stat v0.2.4-decompiled -- work/60_patches/effective_0.2.4   # = the mod
+git diff --stat v0.2.7-decompiled -- work/60_patches/effective_0.2.7   # = the mod
 ```
 
 ## Log
 
-**2026-11-21** — **mod v11: altar odds** (built `f1fc44fa1aedba9b…`, not yet installed). Random altars are
+**2026-11-21 (latest)** — **Official update 0.2.4 → 0.2.7 handled (mod reinstalled as v12, pack
+`c632e8c42475eca2…`)** — second live run of the §10/§14 recipe, full write-up **§19**. Updater deleted our
+modded pack again; decompiled 101/101 scripts of `patch_0.2.7.pck` (rev 101, unchanged) →
+`effective_0.2.7/` (175 `.gd`, 4 new: `wb_portal`/`world_boss`/`world_chat`/`harmony_view`), tagged
+`v0.2.7-decompiled`; `mod-latest.patch` applied with **1 conflict** — the dev rewrote the Star Crumb roll to
+`_hits(star_crumb_chance(e) * drop, fused)` (fused crowds roll per monster) and added a 4th crumb source
+`GOLD_PORING_CRUMB 0.05`, so `MOD_CRUMB_MULT` now sits at both sites. `--deep` round-trip: every source line
+present in the bytecode, all 11. Also found: `orig/patch_0.2.5.pck` is an **encrypted download** (`GDEC`,
+`updater.gd _decrypt`/`PATCH_KEY`), not a format change — copy packs from `user://patches` only after a mount.
+Dev nerfed `KARMA_UNIQUE_CHANCE 0.06 → 0.017`; new content = world bosses (`WB_*` + 6 chest grades),
+combo system, 3 maps (§19.3).
+
+**2026-11-21** — **mod v11: altar odds** (built `f1fc44fa1aedba9b…`, superseded by the 0.2.7 port). Random altars are
 one weighted roll in `core/altars.gd spawn():240-252` over the 8 ids without `npc`/`karma`; Baldur/Hel are a
 separate 50/50 karma spawn (`karma.gd:167`), so they needed their own knob. `MOD_ALTAR_W` (override map read
 at the two `get("w", 1.0)` lines) 6.0 for odin/thor/loki/yggdrasil (24.2 % each) vs 0.2 for
@@ -168,5 +182,5 @@ is how a `tower_traps.gdc` override reaches the top layer.
 ```sh
 git log --oneline | head -1                    # unchanged unless the child committed (they must not)
 git status --porcelain | wc -l                 # expect 0
-git diff --stat v0.2.4-decompiled -- work/60_patches/effective_0.2.4 | tail -1   # the mod, +/- only
+git diff --stat v0.2.7-decompiled -- work/60_patches/effective_0.2.7 | tail -1   # the mod, +/- only
 ```

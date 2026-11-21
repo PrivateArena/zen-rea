@@ -10,6 +10,37 @@ extends RefCounted
 
 const LINES: = 3
 
+# [MOD] Star Potential odds. Shipped values: POTENTIAL_UP = [0.1, 0.04] (a reroll climbs one tier only
+# that often, so Raro -> Legendario needs two successes: ~35 rerolls expected), POTENTIAL_SAME = 0.2
+# (each of lines 2 and 3 keeps the item's tier with that probability, else it drops one - even a
+# Legendario item therefore shows only 1.4 legendary lines of 3), POTENTIAL_PERFECT = 0.2. The mod reads
+# the same table shape and keeps everything else as shipped - INCLUDING POTENTIAL_LOCK_COST = 3, so the
+# price per reroll is still 1 / 4 / 7 / 10 crumbs: locking stays exactly as the developers priced it, and
+# the only reason a full grind is cheaper now is that it takes fewer rolls.
+const MOD_POT_UP: = [0.3, 0.18]
+const MOD_POT_SAME: = 0.85
+const MOD_POT_PERFECT: = 0.8
+# [MOD] Weighted line choice. The shipped pick is uniform over the 18 kinds in POTENTIAL_LINES, so the
+# perfect legendary "stats" line (+7% a todos los atributos; semi is +5%, value() takes vals[3] when the
+# line is top tier AND perfect) is 1/18 per line - three of them on one item is (1/18)^3 = 1/5832 rolls,
+# which is why a full +7 set is effectively unreachable. Weighting stats at 12 makes it 12/29 = 41% of
+# the 18 kinds, and with MOD_POT_PERFECT 0.8 a line lands as the +7% kind 33% of the time (shipped:
+# 1/18 x 0.2 = 1.1%). Every other kind keeps weight 1.0, so dmg / proc / boss hunting stays at shipped odds.
+const MOD_POT_KEY_W: = {"stats": 12.0}
+static var mod_pot_rolls: = 0
+
+
+static func _pot_key(keys: Array) -> String:
+	var total: = 0.0
+	for k in keys:
+		total += float(MOD_POT_KEY_W.get(str(k), 1.0))
+	var r: = randf() * total
+	for k in keys:
+		r -= float(MOD_POT_KEY_W.get(str(k), 1.0))
+		if r <= 0.0:
+			return str(k)
+	return str(keys[0])
+
 
 static func has(it) -> bool:
 	return it is Dictionary and (it as Dictionary).get("pot") is Dictionary and not (it.pot.get("lines", []) as Array).is_empty()
@@ -130,7 +161,7 @@ static func roll(it: Dictionary, locked: Array) -> bool:
 	var up: = false
 	if t == 0:
 		t = 1
-	elif t < GameData.POTENTIAL_TIERS.size() and randf() < float(GameData.POTENTIAL_UP[t - 1]):
+	elif t < GameData.POTENTIAL_TIERS.size() and randf() < float(MOD_POT_UP[t - 1]):
 		t += 1
 		up = true
 	var keys: Array = GameData.POTENTIAL_LINES.keys()
@@ -139,11 +170,11 @@ static func roll(it: Dictionary, locked: Array) -> bool:
 		if locked.has(i) and i < old.size():
 			out.append((old[i] as Dictionary).duplicate())
 			continue
-		var lt: = t if i == 0 or randf() < GameData.POTENTIAL_SAME else maxi(1, t - 1)
-		var line: = {"k": str(keys.pick_random()), "t": lt}
+		var lt: = t if i == 0 or randf() < MOD_POT_SAME else maxi(1, t - 1)
+		var line: = {"k": _pot_key(keys), "t": lt}
 
 		if lt >= GameData.POTENTIAL_TIERS.size():
-			line["p"] = randf() < GameData.POTENTIAL_PERFECT
+			line["p"] = randf() < MOD_POT_PERFECT
 		out.append(line)
 	it["pot"] = {"tier": t, "lines": out}
 
@@ -155,6 +186,31 @@ static func roll(it: Dictionary, locked: Array) -> bool:
 			Save.bump("pot_legend")
 			if bool(out[i].get("p", false)):
 				Save.bump("pot_perfect")
+	# [MOD] measured outcome -> user://mod_probe_potential.txt (every 8th roll): rolls spent, the tier the
+	# item is on now, and how many of the three lines came out Legendary / perfect.
+	mod_pot_rolls += 1
+	if mod_pot_rolls % 8 == 1:
+		var leg: = 0
+		var perf: = 0
+		var stats: = 0
+		var perfect_stats: = 0
+		for l in out:
+			if int((l as Dictionary).get("t", 0)) >= GameData.POTENTIAL_TIERS.size():
+				leg += 1
+				if bool((l as Dictionary).get("p", false)):
+					perf += 1
+			if str((l as Dictionary).get("k", "")) == "stats":
+				stats += 1
+				if int((l as Dictionary).get("t", 0)) >= GameData.POTENTIAL_TIERS.size() and bool((l as Dictionary).get("p", false)):
+					perfect_stats += 1
+		var s: = "rolls=%d  tier=%d  legendary_lines=%d/3  perfect=%d  stats_lines=%d/3  perfect_stats=%d  (up=%s same=%.2f perfect_p=%.2f stats_w=%.1f)" % [
+			mod_pot_rolls, t, leg, perf, stats, perfect_stats, str(MOD_POT_UP), MOD_POT_SAME, MOD_POT_PERFECT,
+			float(MOD_POT_KEY_W.get("stats", 1.0))]
+		print("MODPROBE potential: ", s)
+		var f: = FileAccess.open("user://mod_probe_potential.txt", FileAccess.WRITE)
+		if f != null:
+			f.store_string(s + "\nat=" + Time.get_datetime_string_from_system() + "\n")
+			f.close()
 	return up
 
 
