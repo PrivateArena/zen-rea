@@ -8498,6 +8498,19 @@ const ALTARS: = {
 
 
 
+# [MOD] Altar spawn weights, read at the roll site in core/altars.gd spawn() (the only place the
+# pool is picked; force-spawns from karma/net/debug bypass it). Shipped defaults are w=1.0 for every
+# rollable altar except yggdrasil (w=0.3) - 7.3 total, so each of the seven was 13.7% and yggdrasil
+# 4.1%. Rollable pool is the 8 ids WITHOUT "npc"/"karma": baldur/hel (karma) and hypnotist (npc) are
+# not here. New odds: odin/thor/loki/yggdrasil 6.0 = 24.19% each (weight x6, x20 for yggdrasil),
+# freyja/niflheim/valkyrie/emperium 0.2 = 0.81% each (weight /5) - useful altars 45.2% -> 96.8% of
+# spawns. The nerfed four are the ones whose "bad" side scales with the monster curve:
+# enemy_dmg +20%, enemy_hp +25%, MVP +25% HP early, elite guard.
+const MOD_ALTAR_W: = {"odin": 6.0, "thor": 6.0, "loki": 6.0, "yggdrasil": 6.0, "freyja": 0.2, "niflheim": 0.2, "valkyrie": 0.2, "emperium": 0.2}
+# [MOD] Baldur vs Hel are a separate spawn (karma.gd, every KARMA_ALTAR_EVERY from KARMA_ALTAR_FROM):
+# shipped 50/50 pick_random(). 0.75 = three Baldur (heal, +10% HP, +5% dmg, Valhalla route) per Hel
+# (-15% max HP, Niflheim route).
+const MOD_KARMA_BALDUR: = 0.75
 const HYPNO_AT: = [150.0, 330.0, 510.0]
 const HYPNO_ENDLESS_EVERY: = 180.0
 const HYPNO_LIFE: = 120.0

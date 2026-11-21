@@ -648,3 +648,39 @@ way it is actually played, i.e. lock a line the moment it comes out +7 %):
 Add the ~10 rolls it now takes to reach Legendario tier (§15) and a full set costs a few dozen crumbs
 instead of several thousand — with `MOD_CRUMB_MULT 2.5` on drops, roughly one Hell-15 run of farming.
 Probe extended: `user://mod_probe_potential.txt` now prints `stats_lines=n/3  perfect_stats=n  (… stats_w=12)`.
+
+## 18. Mod v11 — altar odds (built, pack sha `f1fc44fa1aedba9b…`)
+
+One roll site only: `core/altars.gd spawn()` (0.2.4 lines 240-252) draws every *random* altar from
+`GameData.ALTARS.keys()` **filtered to the ids that have neither `npc` nor `karma`**, weighted by
+`ALTARS[id].get("w", 1.0)`. Shipped: 7 ids at `w` absent→1.0 and `yggdrasil` at 0.3 (total 7.3), and
+`hypnotist` carries `w: 0.0` which is dead code because the `npc` filter already drops it.
+Consequence worth knowing: **`baldur` and `hel` are not in that pool at all** — they come from the karma
+timer (`core/karma.gd:167`, one altar every `KARMA_ALTAR_EVERY = [150, 210]` s from `t = 90`), as a
+50/50 `pick_random()`. So "make Baldur more likely" cannot be done in the table; it is its own knob.
+
+Changes: `MOD_ALTAR_W` (new const, `game_data.gd`, before `HYPNO_AT`) is consulted as an override at the
+two `get("w", 1.0)` lines, and `MOD_KARMA_BALDUR` replaces the 50/50 pick. 2 rewritten lines in
+`altars.gd`, 1 in `karma.gd`, all listed in `lint-allow.txt`; `game_data.gd` stays pure insertion.
+`force`-spawned altars (net sync, debug menu) are unaffected — as intended.
+
+Measured by replaying that exact loop with the real consts, 200 k picks each
+(`work/logs/altar_odds/`, `python3 mk_probe.py && godot --headless --path . -s res://sim.gd`):
+
+| altar | stock | mod v11 | weight | bad side (shipped) |
+| --- | --- | --- | --- | --- |
+| odin | 13.7 % | **24.3 %** | 1.0 → 6.0 | Más monstruos feroces (+elite) |
+| thor | 13.7 % | **24.1 %** | 1.0 → 6.0 | +40 % de monstruos |
+| loki | 13.7 % | **24.4 %** | 1.0 → 6.0 | monstruos +25 % velocidad |
+| yggdrasil | 4.1 % | **24.2 %** | 0.3 → 6.0 | — (no downside) |
+| freyja | 13.8 % | 0.8 % | 1.0 → 0.2 | monstruos +20 % daño |
+| niflheim | 13.8 % | 0.8 % | 1.0 → 0.2 | monstruos +25 % vida |
+| valkyrie | 13.5 % | 0.8 % | 1.0 → 0.2 | MVP 60 s antes, +25 % vida |
+| emperium | 13.7 % | 0.8 % | 1.0 → 0.2 | guardia de élites |
+
+Useful-pool share 45.2 % → **96.8 %**; karma altars Baldur/Hel 50/50 → **75/25**
+(`MOD_KARMA_BALDUR 0.75`; Baldur = +10 % max HP, +5 % dmg, full heal, Valhalla route; Hel = −15 % max HP,
+Niflheim route). The nerfed four are the ones whose penalty multiplies with the monster curve instead of
+staying flat — and note the *good* side of niflheim/thor is what `MOD_XP_MULT` (§14.1) already covers.
+Tuning: the four good weights only need to stay ≫ the four bad ones; at 6.0/0.2 a run with
+`ALTAR_MAX = 5` concurrent altars effectively never sees a nerf altar.

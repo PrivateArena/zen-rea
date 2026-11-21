@@ -240,11 +240,11 @@ func spawn(force: = "", where: = Vector3.INF) -> void :
 	var ids: = GameData.ALTARS.keys().filter( func(id): return not GameData.ALTARS[id].has("npc") and not GameData.ALTARS[id].has("karma"))
 	var total: = 0.0
 	for id in ids:
-		total += float(GameData.ALTARS[id].get("w", 1.0))
+		total += float(GameData.MOD_ALTAR_W.get(id, GameData.ALTARS[id].get("w", 1.0)))
 	var r: = randf() * total
 	var pick: = ""
 	for id in ids:
-		r -= float(GameData.ALTARS[id].get("w", 1.0))
+		r -= float(GameData.MOD_ALTAR_W.get(id, GameData.ALTARS[id].get("w", 1.0)))
 		if r <= 0.0:
 			pick = id
 			break

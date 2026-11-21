@@ -96,6 +96,14 @@ git diff --stat v0.2.4-decompiled -- work/60_patches/effective_0.2.4   # = the m
 
 ## Log
 
+**2026-11-21** — **mod v11: altar odds** (built `f1fc44fa1aedba9b…`, not yet installed). Random altars are
+one weighted roll in `core/altars.gd spawn():240-252` over the 8 ids without `npc`/`karma`; Baldur/Hel are a
+separate 50/50 karma spawn (`karma.gd:167`), so they needed their own knob. `MOD_ALTAR_W` (override map read
+at the two `get("w", 1.0)` lines) 6.0 for odin/thor/loki/yggdrasil (24.2 % each) vs 0.2 for
+freyja/niflheim/valkyrie/emperium (0.8 % each) → useful altars 45.2 % → 96.8 % of spawns; Baldur : Hel
+50/50 → 75/25. Measured 200 k rolls of the real loop + real consts (`work/logs/altar_odds/`), documented
+§18. game_data.gd is pure insertion; 3 rewritten lines in `lint-allow.txt`; MOD_TAG → v11.
+
 **2026-11-20 (latest)** — **mod v8** (pack `41fa493c…`): Star Potential. `MOD_CRUMB_MULT 2.5` at the single
 crumb roll site (`main.gd:11685`, MVP/Hel/hell scale together, Hell-10 gate kept) and the tier odds
 `MOD_POT_UP [0.30,0.18]` / `MOD_POT_SAME 0.7` / `MOD_POT_PERFECT 0.3` in `Potential.roll`
