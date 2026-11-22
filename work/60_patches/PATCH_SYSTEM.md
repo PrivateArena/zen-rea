@@ -792,3 +792,36 @@ produced a tree byte-identical to the one the installed pack was built from — 
 now stated in terms of 0.2.7 code, and the reports reproduce the hand analysis of §19 exactly
 (`110 same / 61 changed / 4 new`, `9 of 11 patched scripts moved`, `+104 -0` members, the one rewritten
 `lint-allow` line).
+
+## 21. Mod v13 — cosmetic gacha odds + softer yggdrasil (built, pack sha `66349701ea251c9e…`)
+
+On top of v12 (the 0.2.7 port). Two tables, one file, no new knobs:
+
+**Gacha** — `GameData.GACHA.odds` (`game_data.gd:1525`) is rewritten in place rather than overridden by a
+`MOD_*` const, because `gacha_panel.gd` reads the *same* dict twice — `roll():468` and the "Probabilidades"
+list `:386` — so a single edit keeps the advertised odds equal to the real ones. `roll()` walks
+unique→common subtracting each weight from `randf()`, therefore **the five values must sum to 1.00**:
+above 1 the lower tiers become unreachable, below 1 the remainder leaks into common.
+
+| tier | shipped | mod v13 | 2 M-spin replay (shipped → mod) |
+| --- | --- | --- | --- |
+| common | 0.69 | **0.40** | 68.98 % → 40.01 % |
+| rare | 0.22 | **0.30** | 22.02 % → 29.97 % |
+| epic | 0.075 | **0.15** | 7.51 % → 14.99 % |
+| legendary | 0.01 | **0.10** | 1.00 % → 10.02 % |
+| unique | 0.005 | **0.05** | 0.50 % → 5.02 % |
+
+The whole 29 % cut comes out of common. E[spins] to hit legendary-or-better 66.7 → 6.7, so `pity 12` /
+`epic_pity 5` are now mostly vestigial (the hard pity is weaker than the natural rate) — left alone, they
+still cover the unlucky tail. `unique` = 6 gacha-eligible outfits (`outfit_santa` is `gacha:false`), so each
+individual outfit is ~0.83 %/spin. The shipped odds line is in `lint-allow.txt`; `--deep` flags one line
+only because the decompiler prints `0.4` where the source says `0.40`.
+
+**Altars** — `MOD_ALTAR_W`: yggdrasil 6.0 → **3.0** (half the other good altars: it is the only rollable
+altar with an empty `"bad"`, so the devs' `w: 0.3` is a deliberate scarcity signal and 3.0 is still 10× it),
+odin/thor/loki 6.0 → **7.0 → 6.0** while paying for the bad altars, and the nerfed four 0.2 → **0.8**.
+Final table `{odin,thor,loki} 6.0, yggdrasil 3.0, {freyja,niflheim,valkyrie,emperium} 0.8`, total weight 24.2:
+**24.8 % / 24.8 % / 24.8 % / 12.4 % / 3.3 % ×4** — bad altars 3.2 % → **13.2 %** of spawns, useful pool 96.8 % → 86.8 %
+(stock 45.2 %). At `ALTAR_EVERY [60,90]` a 30-min run offers ~24 altars, so ~3 of them now carry a downside
+(v11/v13a: ~1). Measured with the §18 harness, captures `work/logs/altar_odds/odds_0.2.7_v13.txt` (7.0/0.2 step)
+and `odds_0.2.7_v13b.txt` (final). Built pack **`66349701ea251c9e…`**, not yet installed.

@@ -1,5 +1,5 @@
 diff --git a/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd b/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd
-index 3a82d14..315c470 100644
+index 3a82d14..066f803 100644
 --- a/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd
 +++ b/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd
 @@ -1522,8 +1522,15 @@ const COSMETIC_RARITY: = {
@@ -43,7 +43,7 @@ index 3a82d14..315c470 100644
  	return maxf(base, minf(base + GRADE_PITY * clampi(pity, 0, GRADE_PITY_MAX), GRADE_CHANCE_MAX))
  
  
-@@ -8821,6 +8838,19 @@ const ALTARS: = {
+@@ -8821,6 +8838,22 @@ const ALTARS: = {
  
  
  
@@ -51,11 +51,14 @@ index 3a82d14..315c470 100644
 +# pool is picked; force-spawns from karma/net/debug bypass it). Shipped defaults are w=1.0 for every
 +# rollable altar except yggdrasil (w=0.3) - 7.3 total, so each of the seven was 13.7% and yggdrasil
 +# 4.1%. Rollable pool is the 8 ids WITHOUT "npc"/"karma": baldur/hel (karma) and hypnotist (npc) are
-+# not here. New odds: odin/thor/loki/yggdrasil 6.0 = 24.19% each (weight x6, x20 for yggdrasil),
-+# freyja/niflheim/valkyrie/emperium 0.2 = 0.81% each (weight /5) - useful altars 45.2% -> 96.8% of
-+# spawns. The nerfed four are the ones whose "bad" side scales with the monster curve:
++# not here. New odds: odin/thor/loki 6.0 = 24.8% each, yggdrasil 3.0 = 12.4% (kept at half the
++# others - it is the only rollable altar with an empty "bad", so the dev's own w=0.3 is a scarcity
++# signal, x10 here is already generous), freyja/niflheim/valkyrie/emperium 0.8 = 3.3% each - the bad
++# four are back in single-digit visibility (0.8% -> 3.3%, 3.2% -> 13.2% of spawns) while the useful
++# pool still dominates at 86.8% (stock 45.2%). Total weight 24.2, odin/thor/loki were trimmed 7.0 -> 6.0
++# to pay for it. The nerfed four are the ones whose "bad" side scales with the monster curve:
 +# enemy_dmg +20%, enemy_hp +25%, MVP +25% HP early, elite guard.
-+const MOD_ALTAR_W: = {"odin": 6.0, "thor": 6.0, "loki": 6.0, "yggdrasil": 6.0, "freyja": 0.2, "niflheim": 0.2, "valkyrie": 0.2, "emperium": 0.2}
++const MOD_ALTAR_W: = {"odin": 6.0, "thor": 6.0, "loki": 6.0, "yggdrasil": 3.0, "freyja": 0.8, "niflheim": 0.8, "valkyrie": 0.8, "emperium": 0.8}
 +# [MOD] Baldur vs Hel are a separate spawn (karma.gd, every KARMA_ALTAR_EVERY from KARMA_ALTAR_FROM):
 +# shipped 50/50 pick_random(). 0.75 = three Baldur (heal, +10% HP, +5% dmg, Valhalla route) per Hel
 +# (-15% max HP, Niflheim route).
@@ -82,7 +85,7 @@ index 8012a26..99a0c91 100644
  			pick = id
  			break
 diff --git a/work/60_patches/effective_0.2.7/scripts/core/enemy.gd b/work/60_patches/effective_0.2.7/scripts/core/enemy.gd
-index cbe73b6..2b919ef 100644
+index cbe73b6..7335483 100644
 --- a/work/60_patches/effective_0.2.7/scripts/core/enemy.gd
 +++ b/work/60_patches/effective_0.2.7/scripts/core/enemy.gd
 @@ -210,6 +210,15 @@ func _init() -> void :
@@ -94,7 +97,7 @@ index cbe73b6..2b919ef 100644
 +const MOD_TIME_SCALE_CAP: = 3.0
 +# [MOD] one-shot proof that this (patch-layer) script is the one the running process loaded.
 +# Enemy.setup() fires on every spawn in every mode, so the probe lands within seconds of a run start.
-+const MOD_TAG: = "mod-v13 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,0.2] karma_baldur=0.75 gacha_odds=[40,30,15,10,5]"
++const MOD_TAG: = "mod-v13 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] karma_baldur=0.75 gacha_odds=[40,30,15,10,5]"
 +static var mod_probe_done: = false
 +static var mod_probe_spawns: = 0
 +static var mod_clock_capped: = 0
@@ -213,7 +216,7 @@ index 3bb23de..b0ca234 100644
  			number(e.position + Vector3(0, 2.6, 0), tr("¡Star Crumb!"), GameData.POTENTIAL_TIERS[2].color, true)
  		if not training and randf() < GameData.GOLD_PORING_COIN * drop:
 diff --git a/work/60_patches/effective_0.2.7/scripts/core/player.gd b/work/60_patches/effective_0.2.7/scripts/core/player.gd
-index ddc5a77..cc91b90 100644
+index ddc5a77..f63650d 100644
 --- a/work/60_patches/effective_0.2.7/scripts/core/player.gd
 +++ b/work/60_patches/effective_0.2.7/scripts/core/player.gd
 @@ -1,6 +1,33 @@
@@ -245,7 +248,7 @@ index ddc5a77..cc91b90 100644
 +# the Lv 443 / 40-minute mark (35.3M -> 53.0M XP), not +50%. It also raises Class Lv, because Class
 +# EXP is roundi(xp_gained), which this feeds. See PATCH_SYSTEM.md §14.
 +const MOD_XP_MULT: = 1.5
-+const MOD_TAG: = "mod-v13 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,0.2] karma_baldur=0.75 gacha_odds=[40,30,15,10,5]"
++const MOD_TAG: = "mod-v13 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] karma_baldur=0.75 gacha_odds=[40,30,15,10,5]"
 +
  
  signal leveled_up
