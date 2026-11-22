@@ -1,8 +1,25 @@
 diff --git a/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd b/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd
-index 3a82d14..579f841 100644
+index 3a82d14..315c470 100644
 --- a/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd
 +++ b/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd
-@@ -6097,6 +6097,13 @@ const GEAR_GRADE_COST_DEFAULT: = 0.5
+@@ -1522,8 +1522,15 @@ const COSMETIC_RARITY: = {
+ 
+ 
+ 
++# [MOD] Cosmetic gacha rarity table. Shipped: common .69 / rare .22 / epic .075 / legendary .01 /
++# unique .005. The cut comes out of common, redistributed up the ladder (common alone was 69% of
++# spins). Must keep summing to 1.00: gacha_panel.gd roll() walks unique->common subtracting each
++# weight from randf(), so a sum above 1 makes the lower tiers unreachable and a sum below 1 leaks
++# the remainder into common. Both the roll and the "Probabilidades" list read this one dict, so the
++# UI always shows the real odds. pity/epic_pity untouched: with legendary at 10% the 12-spin
++# hard-pity and the 5-spin epic pity are now rarely the reason a good item drops.
+ const GACHA: = {"coins": 5, "zeny": 20000000, "dupe_coins": 1, "pity": 12, "epic_pity": 5, 
+-	"odds": {"common": 0.69, "rare": 0.22, "epic": 0.075, "legendary": 0.01, "unique": 0.005}}
++	"odds": {"common": 0.40, "rare": 0.30, "epic": 0.15, "legendary": 0.10, "unique": 0.05}}
+ const COSMETICS: = {
+ 	"poring_hat": {"name": "Poring Hat", "slot": "top", "view": "hat_c_poring_hat", "rarity": "common"}, 
+ 	"lunatic_hat": {"name": "Lunatic Hat", "slot": "top", "view": "hat_c_lunatic_hat", "rarity": "common"}, 
+@@ -6097,6 +6104,13 @@ const GEAR_GRADE_COST_DEFAULT: = 0.5
  const GRADE_PITY: = 0.025
  const GRADE_CHANCE_MAX: = 0.75
  const GRADE_PITY_MAX: = 40
@@ -16,7 +33,7 @@ index 3a82d14..579f841 100644
  
  
  
-@@ -6112,6 +6119,9 @@ const HARMONY_SHARE: = [0.0, 0.03, 0.06, 0.1, 0.15, 0.2]
+@@ -6112,6 +6126,9 @@ const HARMONY_SHARE: = [0.0, 0.03, 0.06, 0.1, 0.15, 0.2]
  
  static func grade_chance(g: int, pity: int) -> float:
  	var base: = float(WEAPON_GRADES[clampi(g, 1, WEAPON_GRADES.size() - 1)].chance)
@@ -26,7 +43,7 @@ index 3a82d14..579f841 100644
  	return maxf(base, minf(base + GRADE_PITY * clampi(pity, 0, GRADE_PITY_MAX), GRADE_CHANCE_MAX))
  
  
-@@ -8821,6 +8831,19 @@ const ALTARS: = {
+@@ -8821,6 +8838,19 @@ const ALTARS: = {
  
  
  
@@ -65,7 +82,7 @@ index 8012a26..99a0c91 100644
  			pick = id
  			break
 diff --git a/work/60_patches/effective_0.2.7/scripts/core/enemy.gd b/work/60_patches/effective_0.2.7/scripts/core/enemy.gd
-index cbe73b6..981fe62 100644
+index cbe73b6..2b919ef 100644
 --- a/work/60_patches/effective_0.2.7/scripts/core/enemy.gd
 +++ b/work/60_patches/effective_0.2.7/scripts/core/enemy.gd
 @@ -210,6 +210,15 @@ func _init() -> void :
@@ -77,7 +94,7 @@ index cbe73b6..981fe62 100644
 +const MOD_TIME_SCALE_CAP: = 3.0
 +# [MOD] one-shot proof that this (patch-layer) script is the one the running process loaded.
 +# Enemy.setup() fires on every spawn in every mode, so the probe lands within seconds of a run start.
-+const MOD_TAG: = "mod-v12 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,0.2] karma_baldur=0.75"
++const MOD_TAG: = "mod-v13 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,0.2] karma_baldur=0.75 gacha_odds=[40,30,15,10,5]"
 +static var mod_probe_done: = false
 +static var mod_probe_spawns: = 0
 +static var mod_clock_capped: = 0
@@ -196,7 +213,7 @@ index 3bb23de..b0ca234 100644
  			number(e.position + Vector3(0, 2.6, 0), tr("¡Star Crumb!"), GameData.POTENTIAL_TIERS[2].color, true)
  		if not training and randf() < GameData.GOLD_PORING_COIN * drop:
 diff --git a/work/60_patches/effective_0.2.7/scripts/core/player.gd b/work/60_patches/effective_0.2.7/scripts/core/player.gd
-index ddc5a77..36d2c44 100644
+index ddc5a77..cc91b90 100644
 --- a/work/60_patches/effective_0.2.7/scripts/core/player.gd
 +++ b/work/60_patches/effective_0.2.7/scripts/core/player.gd
 @@ -1,6 +1,33 @@
@@ -228,7 +245,7 @@ index ddc5a77..36d2c44 100644
 +# the Lv 443 / 40-minute mark (35.3M -> 53.0M XP), not +50%. It also raises Class Lv, because Class
 +# EXP is roundi(xp_gained), which this feeds. See PATCH_SYSTEM.md §14.
 +const MOD_XP_MULT: = 1.5
-+const MOD_TAG: = "mod-v12 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,0.2] karma_baldur=0.75"
++const MOD_TAG: = "mod-v13 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,0.2] karma_baldur=0.75 gacha_odds=[40,30,15,10,5]"
 +
  
  signal leveled_up

@@ -26,7 +26,7 @@ static var mod_choice_rolls: = 0
 # the Lv 443 / 40-minute mark (35.3M -> 53.0M XP), not +50%. It also raises Class Lv, because Class
 # EXP is roundi(xp_gained), which this feeds. See PATCH_SYSTEM.md §14.
 const MOD_XP_MULT: = 1.5
-const MOD_TAG: = "mod-v12 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,0.2] karma_baldur=0.75"
+const MOD_TAG: = "mod-v13 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,0.2] karma_baldur=0.75 gacha_odds=[40,30,15,10,5]"
 
 
 signal leveled_up

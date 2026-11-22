@@ -1522,8 +1522,15 @@ const COSMETIC_RARITY: = {
 
 
 
+# [MOD] Cosmetic gacha rarity table. Shipped: common .69 / rare .22 / epic .075 / legendary .01 /
+# unique .005. The cut comes out of common, redistributed up the ladder (common alone was 69% of
+# spins). Must keep summing to 1.00: gacha_panel.gd roll() walks unique->common subtracting each
+# weight from randf(), so a sum above 1 makes the lower tiers unreachable and a sum below 1 leaks
+# the remainder into common. Both the roll and the "Probabilidades" list read this one dict, so the
+# UI always shows the real odds. pity/epic_pity untouched: with legendary at 10% the 12-spin
+# hard-pity and the 5-spin epic pity are now rarely the reason a good item drops.
 const GACHA: = {"coins": 5, "zeny": 20000000, "dupe_coins": 1, "pity": 12, "epic_pity": 5, 
-	"odds": {"common": 0.69, "rare": 0.22, "epic": 0.075, "legendary": 0.01, "unique": 0.005}}
+	"odds": {"common": 0.40, "rare": 0.30, "epic": 0.15, "legendary": 0.10, "unique": 0.05}}
 const COSMETICS: = {
 	"poring_hat": {"name": "Poring Hat", "slot": "top", "view": "hat_c_poring_hat", "rarity": "common"}, 
 	"lunatic_hat": {"name": "Lunatic Hat", "slot": "top", "view": "hat_c_lunatic_hat", "rarity": "common"}, 

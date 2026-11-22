@@ -35,3 +35,5 @@ const MOD_TAG: = "mod-v10 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics
 				world.altars.spawn(["baldur", "hel"].pick_random())
 	var crumbs: = 0 if e.summoned or training else _hits(star_crumb_chance(e) * drop, fused)
 		if not training and randf() < GameData.GOLD_PORING_CRUMB * drop:
+	"odds": {"common": 0.69, "rare": 0.22, "epic": 0.075, "legendary": 0.01, "unique": 0.005}}
+const MOD_TAG: = "mod-v12 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,0.2] karma_baldur=0.75"
