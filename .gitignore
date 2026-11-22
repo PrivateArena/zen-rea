@@ -23,6 +23,7 @@
 !/work/60_patches/
 /work/60_patches/*
 !/work/60_patches/PATCH_SYSTEM.md
+!/work/60_patches/SWORD_WINGS_FARM_GUIDE.md
 !/work/60_patches/build.sh
 # the official-update pipeline (see PATCH_SYSTEM.md section 20)
 !/work/60_patches/update.sh

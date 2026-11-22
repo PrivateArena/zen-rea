@@ -34,7 +34,7 @@ telemetry/leaderboard/cloud-save/update-manifest only. Consequence: `Rizin/Cutte
 | `work/10_evidence/` | 2 REA inventory bundles (45 MB each) |
 | `work/25_scripts/` | scripts-only recovery — the fast place to grep/read GDScript |
 | `work/30_recovered/` | full recovered project, 2.0 GB, 26,746 files (the only copy since `40_mod` was deleted 2026-11-19) |
-| `work/60_patches/` | **the live patch layer + all mod work.** `PATCH_SYSTEM.md` = findings (§7 balance map, §10 update behaviour, §14 + §19 = migrations, §20 = the scripted pipeline). `effective_0.2.7/` = the 175 `.gd` tree the game really runs (git-tracked source; `effective_0.2.3/`, `effective_0.2.4/` kept as history). `update.sh` = one command after an official patch (`layer_sync.sh` ingest+tag → `layer_diff.sh` report → `mod_apply.sh` re-apply+audit), `build.sh` = compile→pack→verify→install (version from `state.json`), `lint-allow.txt` = intentionally-replaced shipped lines, `mod-latest.patch` / `mod-0.2.7.patch`, `orig/` = **the only pristine pack backups** (`patch_0.2.3/0.2.4/0.2.5/0.2.7.pck`) |
+| `work/60_patches/` | **the live patch layer + all mod work.** `PATCH_SYSTEM.md` = findings (§7 balance map, §10 update behaviour, §14 + §19 = migrations, §20 = the scripted pipeline). `SWORD_WINGS_FARM_GUIDE.md` = the tier-`slots` item bug (`ITEM_TIERS[slots]` multiplies every base mod) + the Endless Tower run-clock/chest farming recipe. `effective_0.2.7/` = the 175 `.gd` tree the game really runs (git-tracked source; `effective_0.2.3/`, `effective_0.2.4/` kept as history). `update.sh` = one command after an official patch (`layer_sync.sh` ingest+tag → `layer_diff.sh` report → `mod_apply.sh` re-apply+audit), `build.sh` = compile→pack→verify→install (version from `state.json`), `lint-allow.txt` = intentionally-replaced shipped lines, `mod-latest.patch` / `mod-0.2.7.patch`, `orig/` = **the only pristine pack backups** (`patch_0.2.3/0.2.4/0.2.5/0.2.7.pck`) |
 | `work/50_roundtrip/` | write-path sandbox; `REPORT.md` = the verified patch recipe; `launch_test/` = ready-to-run fixture |
 | `work/logs/` | `pck-files.txt`, `verify.baseline.json`, per-run logs |
 | `PROJECT_OVERVIEW.md` (env) · `work/README.md` (dir map) | boot reading |
@@ -103,7 +103,24 @@ cd work/60_patches && ./update.sh --dry-run      # what the next official patch 
 
 ## Log
 
-**2026-11-21 (latest)** — **Update pipeline scripted (§20)**: `work/60_patches/{update,layer_sync,layer_diff,mod_apply}.sh`
+**2026-11-22 (latest)** — **Documented the "+60 % Sword Wings" case → `work/60_patches/SWORD_WINGS_FARM_GUIDE.md`.**
+Player-reported 2×-mods wings (dmg/hp 0.3→0.6, aspd/haste 0.2→0.4, move 0.1→0.2) is *not* a second item:
+there is exactly one `slot: wings` def (`sword_wings`, `game_data.gd:7258`) and `_base_mods`
+multiplies every mod by `ITEM_TIERS[it.slots].mult` (`equipment.gd:596`, mults 1.0/1.3/1.6/**2.0**).
+Root cause = loot-pool bug, live and unfixed 0.1.273→0.2.7: `roll_item`'s pool filter excludes only
+`legendary`/`face`/`rank > max_rank` (not `wings`/`bound`) and `if bonus > 0: n = maxi(n,
+CHEST_MIN_SLOTS=3)` makes the chest-bonus param double as the tier index (`equipment.gd:712-761`), plus it
+attaches a purple `trait` that `can_trait()` would refuse — the fingerprint on the tooltip. Gate:
+`max_rank = 1 + int(run_time/180) + bonus >= 99` ⇒ **17 100–17 640 game-seconds in ONE run** (clock is
+per-run, `time = 0.0` in `start_run` `main.gd:1374`; tower entry calls `start_run` ⇒ **unbankable outside
+the climb**, tower runs are never save/resumed `run_save.gd:66-69`), and only `bonus >= 1/2/3` chests can
+carry it — the Naght Sieger `treasure` chest cannot (forced legendary branch → `make(pick, 0)`). It survived
+the player's *autosell_purple* only because `receive()` equips before the sell gate (`equipment.gd:1151-1169`).
+Guide contains the idle-the-clock exploit (no idle timer/AFK kick/difficulty ramp; menus + window-minimise DO
+stop it; ×2 = 2 h 25 m real), per-class odds (1.5–2.5 %/roll), and a v13 knob sketch (lower `rank 99→6` +
+`MOD_ITEM_W` appended at `equipment.gd:726`). **No code or pack changed.**
+
+**2026-11-21** — **Update pipeline scripted (§20)**: `work/60_patches/{update,layer_sync,layer_diff,mod_apply}.sh`
 + `layer_env.sh`, git-tracked. `./update.sh --deep` now does ingest→report→re-apply→build; guards for GDEC
 (encrypted) packs, unknown bytecode rev, re-ingest, already-modded tree; `mod_apply.sh` audits that every
 `MOD_` knob landed in the same function as in the previous layer (exit 3 = hand resolution needed). Verified
