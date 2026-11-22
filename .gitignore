@@ -32,8 +32,9 @@
 !/work/60_patches/layer_env.sh
 !/work/60_patches/lint-allow.txt
 !/work/60_patches/mod-latest.patch
-!/work/60_patches/effective_0.2.3/
-!/work/60_patches/effective_0.2.4/
+# Ignore old version for cleaner search
+/work/60_patches/effective_0.2.3/
+/work/60_patches/effective_0.2.4/
 # build/ and out/ under 60_patches are generated -> ignored
 
 # never track these, wherever they appear
