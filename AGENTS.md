@@ -103,7 +103,7 @@ cd work/60_patches && ./update.sh --dry-run      # what the next official patch 
 
 ## Log
 
-**2026-11-23** — **mod v14: Emperium event odds (built `6122aba72cdd3933…`, NOT installed pending play-test)** —
+**2026-11-23 (latest)** — **mod v14: Emperium event odds (built `6122aba72cdd3933…`, NOT installed pending play-test)** —
 player hit a bug-made `slots=3` Sword Wings (+60% = `ITEM_TIERS[slots].mult` × base mods); full forensic write-up
 in `work/60_patches/SWORD_WINGS_FARM_GUIDE.md` (§1-9: the `roll_item` bug, why auto-sell missed it, the run-clock
 math, tower chest sources, per-class odds, the idle-the-clock farm). §10 = this release: 4 new knobs in
