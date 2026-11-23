@@ -1,5 +1,5 @@
 diff --git a/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd b/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd
-index 3a82d14..066f803 100644
+index 3a82d14..1e4ce16 100644
 --- a/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd
 +++ b/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd
 @@ -1522,8 +1522,15 @@ const COSMETIC_RARITY: = {
@@ -43,7 +43,7 @@ index 3a82d14..066f803 100644
  	return maxf(base, minf(base + GRADE_PITY * clampi(pity, 0, GRADE_PITY_MAX), GRADE_CHANCE_MAX))
  
  
-@@ -8821,6 +8838,22 @@ const ALTARS: = {
+@@ -8821,6 +8838,27 @@ const ALTARS: = {
  
  
  
@@ -51,14 +51,19 @@ index 3a82d14..066f803 100644
 +# pool is picked; force-spawns from karma/net/debug bypass it). Shipped defaults are w=1.0 for every
 +# rollable altar except yggdrasil (w=0.3) - 7.3 total, so each of the seven was 13.7% and yggdrasil
 +# 4.1%. Rollable pool is the 8 ids WITHOUT "npc"/"karma": baldur/hel (karma) and hypnotist (npc) are
-+# not here. New odds: odin/thor/loki 6.0 = 24.8% each, yggdrasil 3.0 = 12.4% (kept at half the
-+# others - it is the only rollable altar with an empty "bad", so the dev's own w=0.3 is a scarcity
-+# signal, x10 here is already generous), freyja/niflheim/valkyrie/emperium 0.8 = 3.3% each - the bad
-+# four are back in single-digit visibility (0.8% -> 3.3%, 3.2% -> 13.2% of spawns) while the useful
-+# pool still dominates at 86.8% (stock 45.2%). Total weight 24.2, odin/thor/loki were trimmed 7.0 -> 6.0
-+# to pay for it. The nerfed four are the ones whose "bad" side scales with the monster curve:
-+# enemy_dmg +20%, enemy_hp +25%, MVP +25% HP early, elite guard.
-+const MOD_ALTAR_W: = {"odin": 6.0, "thor": 6.0, "loki": 6.0, "yggdrasil": 3.0, "freyja": 0.8, "niflheim": 0.8, "valkyrie": 0.8, "emperium": 0.8}
++# not here. New odds: odin/thor/loki/emperium 6.0 = 20.4% each (measured 200 k rolls of the real loop,
++# work/logs/altar_odds/: 20.47 / 20.34 / 20.41 / 20.39), yggdrasil 3.0 = 10.2% (kept at half the
++# others - it is the only rollable altar with an empty "bad", so the dev's own w=0.3 is a scarcity signal,
++# x10 here is already generous), freyja/niflheim/valkyrie 0.8 = 2.7% each. Total weight 29.4; the reward
++# pool (the five altars whose "good" is a real reward) is 91.9% of spawns - stock 58.9%, or 45.2% if you
++# count Emperium as a debuff altar, which is what v11 did and v15 undoes.
++# EMPERIUM moved 0.8 -> 6.0 in v15 - it was mis-grouped with the "bad four" in v11. Its "bad" is a fight
++# (EMPERIUM_GUARDS = 5 elites from the stage/tower tier pool, altars.gd:761-788) and its "good" is the best
++# payout in the table: a 3-roll bonus-2 MVP Treasure Box (altars.gd:796 -> main.gd:13598) plus +1 level per
++# hero (altars.gd:799-803). That box goes through roll_item()'s normal pool, so it is one of the two altars
++# that can mint Sword Wings (SWORD_WINGS_FARM_GUIDE.md §11). The genuinely bad three are the ones whose
++# "bad" side scales with the monster curve and pays nothing: enemy_dmg +20%, enemy_hp +25%, MVP +25% HP early.
++const MOD_ALTAR_W: = {"odin": 6.0, "thor": 6.0, "loki": 6.0, "yggdrasil": 3.0, "freyja": 0.8, "niflheim": 0.8, "valkyrie": 0.8, "emperium": 6.0}
 +# [MOD] Baldur vs Hel are a separate spawn (karma.gd, every KARMA_ALTAR_EVERY from KARMA_ALTAR_FROM):
 +# shipped 50/50 pick_random(). 0.75 = three Baldur (heal, +10% HP, +5% dmg, Valhalla route) per Hel
 +# (-15% max HP, Niflheim route).
@@ -85,7 +90,7 @@ index 8012a26..99a0c91 100644
  			pick = id
  			break
 diff --git a/work/60_patches/effective_0.2.7/scripts/core/enemy.gd b/work/60_patches/effective_0.2.7/scripts/core/enemy.gd
-index cbe73b6..3bf8d80 100644
+index cbe73b6..6ae421a 100644
 --- a/work/60_patches/effective_0.2.7/scripts/core/enemy.gd
 +++ b/work/60_patches/effective_0.2.7/scripts/core/enemy.gd
 @@ -210,6 +210,15 @@ func _init() -> void :
@@ -97,7 +102,7 @@ index cbe73b6..3bf8d80 100644
 +const MOD_TIME_SCALE_CAP: = 3.0
 +# [MOD] one-shot proof that this (patch-layer) script is the one the running process loaded.
 +# Enemy.setup() fires on every spawn in every mode, so the probe lands within seconds of a run start.
-+const MOD_TAG: = "mod-v14 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16]"
++const MOD_TAG: = "mod-v15 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16]"
 +static var mod_probe_done: = false
 +static var mod_probe_spawns: = 0
 +static var mod_clock_capped: = 0
@@ -216,7 +221,7 @@ index 3bb23de..b0ca234 100644
  			number(e.position + Vector3(0, 2.6, 0), tr("¡Star Crumb!"), GameData.POTENTIAL_TIERS[2].color, true)
  		if not training and randf() < GameData.GOLD_PORING_COIN * drop:
 diff --git a/work/60_patches/effective_0.2.7/scripts/core/player.gd b/work/60_patches/effective_0.2.7/scripts/core/player.gd
-index ddc5a77..cfaa56a 100644
+index ddc5a77..536fad8 100644
 --- a/work/60_patches/effective_0.2.7/scripts/core/player.gd
 +++ b/work/60_patches/effective_0.2.7/scripts/core/player.gd
 @@ -1,6 +1,33 @@
@@ -248,7 +253,7 @@ index ddc5a77..cfaa56a 100644
 +# the Lv 443 / 40-minute mark (35.3M -> 53.0M XP), not +50%. It also raises Class Lv, because Class
 +# EXP is roundi(xp_gained), which this feeds. See PATCH_SYSTEM.md §14.
 +const MOD_XP_MULT: = 1.5
-+const MOD_TAG: = "mod-v14 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16]"
++const MOD_TAG: = "mod-v15 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16]"
 +
  
  signal leveled_up
@@ -422,10 +427,10 @@ index bfe6737..00db96a 100644
  
  
 diff --git a/work/60_patches/effective_0.2.7/scripts/core/tower_events.gd b/work/60_patches/effective_0.2.7/scripts/core/tower_events.gd
-index 0a3b5e6..aafe966 100644
+index 0a3b5e6..b8e9bbd 100644
 --- a/work/60_patches/effective_0.2.7/scripts/core/tower_events.gd
 +++ b/work/60_patches/effective_0.2.7/scripts/core/tower_events.gd
-@@ -40,9 +40,74 @@ func _init(w: World, t: Node) -> void :
+@@ -40,9 +40,138 @@ func _init(w: World, t: Node) -> void :
  
  
  
@@ -437,9 +442,25 @@ index 0a3b5e6..aafe966 100644
 +# and wheel pays no chest at all. Weighted by id, unlisted kinds keep weight 1.0 and the shipped "never
 +# twice in a row" filter is kept, so emperium 9.0 -> 9/13 = 69.2% per event floor, 40.9% long run = one
 +# every ~24 floors; the other five 1/13 = 7.7% each (was 20%/16.7%). Re-weighting is the cheap lever,
-+# not more event floors: that same residue also carries the elite floor (tower_run.gd:581) and the Lucile
++# not more event floors: that same residue also carries the elite floor (tower_run.gd:586) and the Lucile
 +# blessing (TOWER_BLESS_FLOOR), and TOWER_TIER_FLOORS itself drives checkpoints, tiers, MVP and camp.
++# v15 keeps this weight as-is and adds the hard cadence floor below, because the two caps above are what
++# the weight is up against: it cannot make a trial appear on a floor the gate does not offer.
 +const MOD_EVENT_W: = {"emperium": 9.0}
++# [MOD] Emperium trial CADENCE (a ceiling, not a chance): at least one trial every MOD_EMP_EVERY floors.
++# Weights alone cannot reach the 9 floors asked for - the shipped gate only offers floor % 10 == 5, and
++# pick() refuses to repeat a kind, so even an infinite weight lands one trial per 2 event floors (measured
++# v14: 24.46 floors). TOWER_TIER_FLOORS itself cannot move (checkpoints/tiers/MVP/camp), so tower_run.gd
++# now asks emp_due(floor) on EVERY floor: the first floor MOD_EMP_EVERY floors past the last trial becomes an
++# Emperium floor, and the shipped residue-5 floors keep the other five kinds (their roll is unaffected).
++# If that floor is a tier-top MVP floor - checked first, tower_run.gd:545 - the trial comes one floor EARLY
++# instead of sliding late: sliding late locks the phase onto floors ending in 1 and gives a flat 10.00. Real
++# numbers over 2 M floors with the shipped gate + the real pick() (work/logs/emp_cadence/sim.gd):
++# shipped 59.9 -> v14 (weights only) 24.4 -> v15 8.89 floors per trial (median 9, min 8, worst 9 = the
++# ceiling holds), 56.3% of event floors, and the other five kinds come back to 1.75 per 100 floors (v14 had
++# starved them to 1.18; shipped is 1.67) because the ceiling, not the roll, now supplies the Emperium.
++# MOD_EMP_EVERY = 0 -> v14 behaviour.
++const MOD_EMP_EVERY: = 9
 +# [MOD] Emperium test. The check HP is derived from your OWN measured average DPS -- hp = max(500,
 +# avg_dps * TOWER_EMPERIUM_DPS 7) * TOWER_EMPERIUM_GROW^_passed -- and must die inside
 +# TOWER_EMPERIUM_TIME 10 s, so clearing check k costs current_dps >= avg_dps * 0.7 * 1.7^(k-1) =
@@ -456,6 +477,13 @@ index 0a3b5e6..aafe966 100644
 +const MOD_EMP_PRIZES: = [5, 7, 9, 12, 16]
 +static var mod_event_n: = {}
 +static var mod_event_rolls: = 0
++# [MOD] measured trial-to-trial spacing of the REAL game (not just of the odds sim) -> the probe line.
++static var mod_emp_floors: = 0.0
++static var mod_emp_gaps: = 0
++# [MOD] floor the last Emperium trial ran on -> the MOD_EMP_EVERY ceiling. -1 = not yet this climb; the lazy
++# seed (TOWER_EVENT_AT - MOD_EMP_EVERY) makes a fresh climb's first trial land on the shipped first event
++# floor, 5. Set on forced AND on rolled trials, so a lucky roll pushes the next forced one back.
++var _emp_floor: = -1
 +
 +
 +func _event_w(k: String) -> float:
@@ -480,8 +508,8 @@ index 0a3b5e6..aafe966 100644
 +	mod_event_rolls += 1
 +	mod_event_n[k] = int(mod_event_n.get(k, 0)) + 1
 +	if mod_event_rolls % 4 == 1:
-+		var s: = "events=%d  emperium=%d (P=%.1f%%) " % [mod_event_rolls, int(mod_event_n.get("emperium", 0)), 
-+			100.0 * int(mod_event_n.get("emperium", 0)) / maxf(1.0, mod_event_rolls)]
++		var s: = "events=%d  emperium=%d (P=%.1f%%)  gap=%.1f floors  " % [mod_event_rolls, int(mod_event_n.get("emperium", 0)), 
++			100.0 * int(mod_event_n.get("emperium", 0)) / maxf(1.0, mod_event_rolls), mod_emp_floors / maxf(1.0, float(mod_emp_gaps))]
 +		for key in mod_event_n.keys():
 +			if str(key) == "emperium":
 +				continue
@@ -498,10 +526,51 @@ index 0a3b5e6..aafe966 100644
  	var pool: Array = GameData.TOWER_EVENTS.keys().filter( func(k): return k != kind)
 -	return str(pool.pick_random())
 +	return _event_pick(pool)
++
++
++# [MOD] asked on every floor by tower_run.gd _start_floor() (:576): yes => this floor is past the ceiling and
++# must carry an Emperium trial. Deliberately does NOT care what the previous kind was: with MOD_EMP_EVERY 9
++# two forced trials can never be adjacent anyway, and the shipped "never twice in a row" filter in pick()
++# keeps the residue-5 floors varied on their own.
++func emp_due(f: int) -> bool:
++	if MOD_EMP_EVERY <= 0:
++		return false
++	if _emp_floor < 0:
++		_emp_floor = GameData.TOWER_EVENT_AT - MOD_EMP_EVERY
++	var d: = f - _emp_floor
++	if d >= MOD_EMP_EVERY:
++		return true
++	# d == MOD_EMP_EVERY - 1: the due floor is the next one. TowerRun reserves every TOWER_TIER_FLOORS-th
++	# floor for the MVP (_start_floor checks `top` first, tower_run.gd:545), and a trial lost there slides to
++	# f+1 -- which with a 9 floor period locks the phase onto floors ending in 1 and turns every gap into 10
++	# (measured). So come one floor EARLY instead: 8 then 9, 9, 9, ..., never a locked 10.
++	if d == MOD_EMP_EVERY - 1:
++		return (f + 1) % GameData.TOWER_TIER_FLOORS == 0
++	return false
++
++
++# [MOD] the entry point tower_run.gd now calls: the ceiling first, else the weighted roll. Records the floor
++# either way, so the clock restarts from whichever trial you actually got.
++func pick_for(f: int) -> String:
++	var k: = ""
++	if emp_due(f):
++		k = _event_note("emperium")
++	else:
++		k = pick()
++	if k == "emperium":
++		# [MOD] cadence probe: the REAL spacing between two Emperium trials, averaged into the `gap=` field of
++		# _event_note. Static like the counters there, so it spans the game process, not one climb - and a new
++		# climb cannot inject a bogus gap, because its floors start below the previous _emp_floor. Read it as:
++		# ~9 floors = MOD_EMP_EVERY is firing; ~24 = the tower_run.gd:576 hook did not land.
++		if _emp_floor >= 0 and f > _emp_floor:
++			mod_emp_floors += float(f - _emp_floor)
++			mod_emp_gaps += 1
++		_emp_floor = f
++	return k
  
  
  func start(at_floor: int, force: = "") -> String:
-@@ -363,6 +428,11 @@ func _rise_emperium() -> void :
+@@ -363,6 +492,11 @@ func _rise_emperium() -> void :
  	_emperium.max_hp = maxf(500.0, dps * GameData.TOWER_EMPERIUM_DPS) * pow(GameData.TOWER_EMPERIUM_GROW, _passed)
  	_emperium.hp = _emperium.max_hp
  	_left = GameData.TOWER_EMPERIUM_TIME
@@ -513,7 +582,7 @@ index 0a3b5e6..aafe966 100644
  	if _emperium.visual is Node3D:
  
  		(_emperium.visual as Node3D).scale *= 1.2 + 0.2 * _passed
-@@ -420,6 +490,7 @@ func _prize() -> void :
+@@ -420,6 +554,7 @@ func _prize() -> void :
  		_finish(0, 0, tr("Sin premio"), tr("El Emperium resistió"))
  		return
  	var rolls: = int(GameData.TOWER_EMPERIUM_PRIZES[mini(_passed, GameData.TOWER_EMPERIUM_PRIZES.size()) - 1])
@@ -521,7 +590,7 @@ index 0a3b5e6..aafe966 100644
  	_finish(rolls, 3, tr("¡%d de %d pruebas!") % [_passed, GameData.TOWER_EMPERIUM_CHECKS], tr("Cofre de diamante: %d objetos") % rolls, GameData.CHEST_DIAMOND)
  
  
-@@ -520,18 +591,54 @@ func _tick_wheel(delta: float) -> void :
+@@ -520,18 +655,54 @@ func _tick_wheel(delta: float) -> void :
  
  
  
@@ -580,7 +649,7 @@ index 0a3b5e6..aafe966 100644
  func _wheel_show(id: String) -> void :
  	var e: Dictionary = tower.wheel_entry(id)
 diff --git a/work/60_patches/effective_0.2.7/scripts/core/tower_run.gd b/work/60_patches/effective_0.2.7/scripts/core/tower_run.gd
-index ef1fe7d..7d1e228 100644
+index ef1fe7d..5fe345c 100644
 --- a/work/60_patches/effective_0.2.7/scripts/core/tower_run.gd
 +++ b/work/60_patches/effective_0.2.7/scripts/core/tower_run.gd
 @@ -1,6 +1,12 @@
@@ -596,7 +665,28 @@ index ef1fe7d..7d1e228 100644
  
  
  
-@@ -963,16 +969,17 @@ func scale_enemy(e: Enemy) -> void :
+@@ -562,9 +568,17 @@ func _start_floor() -> void :
+ 				_lord_talk()
+ 		elif GameData.MONSTERS.has(mvp):
+ 			world._run_event({"type": "boss", "mob": mvp})
+-	elif floor >= GameData.TOWER_EVENT_FROM and floor % GameData.TOWER_TIER_FLOORS == GameData.TOWER_EVENT_AT:
+-
+-		_sign_kind = _force_event if _force_event != "" else _events.pick()
++	# [MOD] The shipped event gate is every 10 floors (TOWER_TIER_FLOORS) and pick() never repeats a kind, so
++	# MOD_EVENT_W alone could not bring the Emperium trial under ~24 floors. Also fire the sign on the floor
++	# TowerEvents.emp_due() declares due (MOD_EMP_EVERY floors past the last trial): that puts the trial on a
++	# ~9 floor rhythm, which is below the tier's 10 and therefore impossible from the residue alone. The
++	# shipped residue-5 floors still carry the roll, so the other five kinds keep their own cadence.
++	# Coop is safe: _sync() (:995-1007) is host-only and re-broadcasts state + _sign_kind every 0.25 s, so a
++	# peer's own local emp_due() answer (its _emp_floor can drift, same as its discarded weighted roll did
++	# before) is overwritten by the host's floor state before the floor can start.
++	elif (_events != null and _events.emp_due(floor)) or (floor >= GameData.TOWER_EVENT_FROM and floor % GameData.TOWER_TIER_FLOORS == GameData.TOWER_EVENT_AT):
++
++		_sign_kind = _force_event if _force_event != "" else _events.pick_for(floor)
+ 		_force_event = ""
+ 		_sign_t = GameData.TOWER_EVENT_SIGN
+ 		state = "sign"
+@@ -963,16 +977,17 @@ func scale_enemy(e: Enemy) -> void :
  	if e.prop != "":
  		return
  	var f: = eff() - 1

@@ -34,7 +34,7 @@ telemetry/leaderboard/cloud-save/update-manifest only. Consequence: `Rizin/Cutte
 | `work/10_evidence/` | 2 REA inventory bundles (45 MB each) |
 | `work/25_scripts/` | scripts-only recovery — the fast place to grep/read GDScript |
 | `work/30_recovered/` | full recovered project, 2.0 GB, 26,746 files (the only copy since `40_mod` was deleted 2026-11-19) |
-| `work/60_patches/` | **the live patch layer + all mod work.** `PATCH_SYSTEM.md` = findings (§7 balance map, §10 update behaviour, §14 + §19 = migrations, §20 = the scripted pipeline). `SWORD_WINGS_FARM_GUIDE.md` = the tier-`slots` item bug (`ITEM_TIERS[slots]` multiplies every base mod) + the Endless Tower run-clock/chest farming recipe. `effective_0.2.7/` = the 175 `.gd` tree the game really runs (git-tracked source; `effective_0.2.3/`, `effective_0.2.4/` kept as history). `update.sh` = one command after an official patch (`layer_sync.sh` ingest+tag → `layer_diff.sh` report → `mod_apply.sh` re-apply+audit), `build.sh` = compile→pack→verify→install (version from `state.json`), `lint-allow.txt` = intentionally-replaced shipped lines, `mod-latest.patch` / `mod-0.2.7.patch`, `orig/` = **the only pristine pack backups** (`patch_0.2.3/0.2.4/0.2.5/0.2.7.pck`) |
+| `work/60_patches/` | **the live patch layer + all mod work.** `PATCH_SYSTEM.md` = findings (§7 balance map, §10 update behaviour, §14 + §19 = migrations, §20 = the scripted pipeline). `SWORD_WINGS_FARM_GUIDE.md` = the tier-`slots` item bug (`ITEM_TIERS[slots]` multiplies every base mod) + the Endless Tower run-clock/chest farming recipe; §11 = the scripted Naght Sieger wings award, the "Mítico" grade and the Emperium altar as a third mint source, §12 = mod v15. `effective_0.2.7/` = the 175 `.gd` tree the game really runs (git-tracked source; `effective_0.2.3/`, `effective_0.2.4/` kept as history). `update.sh` = one command after an official patch (`layer_sync.sh` ingest+tag → `layer_diff.sh` report → `mod_apply.sh` re-apply+audit), `build.sh` = compile→pack→verify→install (version from `state.json`), `lint-allow.txt` = intentionally-replaced shipped lines, `mod-latest.patch` / `mod-0.2.7.patch`, `orig/` = **the only pristine pack backups** (`patch_0.2.3/0.2.4/0.2.5/0.2.7.pck`) |
 | `work/50_roundtrip/` | write-path sandbox; `REPORT.md` = the verified patch recipe; `launch_test/` = ready-to-run fixture |
 | `work/logs/` | `pck-files.txt`, `verify.baseline.json`, per-run logs |
 | `PROJECT_OVERVIEW.md` (env) · `work/README.md` (dir map) | boot reading |
@@ -49,11 +49,12 @@ Key numbers: env 830 MB on nvme; work 2.8 GB on `/media/jang/free` (6.2 GB free 
    moved, re-applies the mod and builds; it **stops with exit 3** on a conflict instead of shipping one.
    Install only after a play-test: `./update.sh --skip-sync --install`.
 
-1. **Play-test mod v12 on 0.2.7** *(human — `./play.sh`, no args after `--`)*: altar mix (96.8 % useful),
-   Star Crumb rate with the new fused `_hits()` roll + Golden Poring source, then `./play.sh --probe`
-   (probe files in `user://`) and retune the `MOD_*` constants.
-   legendary frequency (≈1 in 10 offers), and the new `×1.5` XP (~+56 levels at the 40-min mark).
-   Then `./play.sh --probe` (5 probe files in `user://`) and retune `MOD_*` constants → `./build.sh --deep --install`.
+1. **Play-test mod v15 on 0.2.7** *(human — `./play.sh`, no args after `--`)*: the two v15 knobs first —
+   tower Emperium trial spacing (`user://mod_probe_events.txt` now prints `gap=<x> floors`; expect ~9, worst 9;
+   ~24 = the `tower_run.gd:576` hook did not land) and the altar mix (Emperium ≈1 spawn in 5, its guard fight →
+   MVP Treasure Box + 1 level). Then the older carry-overs: Star Crumb rate with the fused `_hits()` roll +
+   Golden Poring source, legendary frequency (≈1 in 10 offers), `×1.5` XP (~+56 levels at the 40-min mark).
+   `./play.sh --probe` (probe files in `user://`) and retune the `MOD_*` constants → `./build.sh --deep --install`.
 2. **Runtime acceptance test of the base-pack write path** *(still pending, needs a human)*:
    `work/50_roundtrip/launch_test/MidgardSurvivorsRT/` → `./MidgardSurvivorsRT.x86_64 -- --disable-updater`.
    Look for ` [RT-TEST]` in a bottom-centre loading tip (`menus.gd:3614`, ~1 tip in 16).
@@ -103,7 +104,23 @@ cd work/60_patches && ./update.sh --dry-run      # what the next official patch 
 
 ## Log
 
-**2026-11-23 (latest)** — **mod v14: Emperium event odds (built `6122aba72cdd3933…`, NOT installed pending play-test)** —
+**2026-11-23 (latest)** — **mod v15: Emperium in both places (built `e9e9d9c422cd1297…`, NOT installed pending play-test)** —
+three player findings verified in code and written up as guide §11: (a) the floor-100 Naght Sieger **does** hand out Sword Wings —
+not from the 5-roll `treasure` chest (that one still cannot) but from the scripted `_award_tower_wings` 1.6 s later
+(`main.gd:12147-12151`, `:12243-12265`), `slots 0` = **+30 %**, once per class forever (`_wings_due` `:12234`); (b) wings are shown as
+**"Mítico"** — a UI grade above Único/Legendario keyed on the `wings` flag (`menus.gd:10134-10142`), there is no `mythic` data field, and the real reason
+autosell misses it is auto-equip before the sell gate: a second tier-3 pair with the wings slot filled **is** sold by "Moradas" (`equipment.gd:1169`, `:1281-1283`)
+— so unchecking it is mandatory for the farm; (c) the Emperium **altar** (`ALTARS["emperium"]`, `game_data.gd:8814`) is the channel-on-it Emperium
+(2 s hold, `EMPERIUM_GUARDS` 5 elites) and its "Treasure Box del MVP" is a 3-roll **bonus-2** chest (`altars.gd:796`), i.e. a normal-pool
+mint of the +60 % pair. Two balance changes: `MOD_ALTAR_W` emperium **0.8 → 6.0** (3.3 % → 20.4 % of altar spawns, reward pool 91.9 %,
+measured 200 k rolls `work/logs/altar_odds/odds_0.2.7_v15.txt`) and new **`MOD_EMP_EVERY 9`** — a hard ceiling on the tower trial spacing,
+because weights alone are capped by the `floor % 10 == 5` gate + pick()'s no-repeat rule (v14 = 24.4 floors). Hook in `tower_run.gd:576` asks
+`emp_due(floor)` on **every** floor; MVP floors are dodged by firing one floor **early** (firing late locks the phase → flat 10.00). Measured 2 M floors of the
+real gate + real pick() (`work/logs/emp_cadence/`, now git-tracked): **shipped 59.9 → v14 24.4 → v15 8.89 floors/trial** (median 9, worst 9), and the other
+five events recover (1.18 → 1.75 per 100 floors). Probe line gained `gap=<x> floors`. `MOD_TAG` v14 → v15; 3 `lint-allow.txt` rows (2 rewritten shipped
+lines in `tower_run.gd` + the superseded tag string). `./mod_apply.sh --check --build --deep` = exit 0, 0/0/0.
+
+**2026-11-23** — **mod v14: Emperium event odds (built `6122aba72cdd3933…`, superseded by v15)** —
 player hit a bug-made `slots=3` Sword Wings (+60% = `ITEM_TIERS[slots].mult` × base mods); full forensic write-up
 in `work/60_patches/SWORD_WINGS_FARM_GUIDE.md` (§1-9: the `roll_item` bug, why auto-sell missed it, the run-clock
 math, tower chest sources, per-class odds, the idle-the-clock farm). §10 = this release: 4 new knobs in

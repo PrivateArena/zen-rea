@@ -568,9 +568,17 @@ func _start_floor() -> void :
 				_lord_talk()
 		elif GameData.MONSTERS.has(mvp):
 			world._run_event({"type": "boss", "mob": mvp})
-	elif floor >= GameData.TOWER_EVENT_FROM and floor % GameData.TOWER_TIER_FLOORS == GameData.TOWER_EVENT_AT:
+	# [MOD] The shipped event gate is every 10 floors (TOWER_TIER_FLOORS) and pick() never repeats a kind, so
+	# MOD_EVENT_W alone could not bring the Emperium trial under ~24 floors. Also fire the sign on the floor
+	# TowerEvents.emp_due() declares due (MOD_EMP_EVERY floors past the last trial): that puts the trial on a
+	# ~9 floor rhythm, which is below the tier's 10 and therefore impossible from the residue alone. The
+	# shipped residue-5 floors still carry the roll, so the other five kinds keep their own cadence.
+	# Coop is safe: _sync() (:995-1007) is host-only and re-broadcasts state + _sign_kind every 0.25 s, so a
+	# peer's own local emp_due() answer (its _emp_floor can drift, same as its discarded weighted roll did
+	# before) is overwritten by the host's floor state before the floor can start.
+	elif (_events != null and _events.emp_due(floor)) or (floor >= GameData.TOWER_EVENT_FROM and floor % GameData.TOWER_TIER_FLOORS == GameData.TOWER_EVENT_AT):
 
-		_sign_kind = _force_event if _force_event != "" else _events.pick()
+		_sign_kind = _force_event if _force_event != "" else _events.pick_for(floor)
 		_force_event = ""
 		_sign_t = GameData.TOWER_EVENT_SIGN
 		state = "sign"

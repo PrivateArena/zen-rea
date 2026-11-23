@@ -8842,14 +8842,19 @@ const ALTARS: = {
 # pool is picked; force-spawns from karma/net/debug bypass it). Shipped defaults are w=1.0 for every
 # rollable altar except yggdrasil (w=0.3) - 7.3 total, so each of the seven was 13.7% and yggdrasil
 # 4.1%. Rollable pool is the 8 ids WITHOUT "npc"/"karma": baldur/hel (karma) and hypnotist (npc) are
-# not here. New odds: odin/thor/loki 6.0 = 24.8% each, yggdrasil 3.0 = 12.4% (kept at half the
-# others - it is the only rollable altar with an empty "bad", so the dev's own w=0.3 is a scarcity
-# signal, x10 here is already generous), freyja/niflheim/valkyrie/emperium 0.8 = 3.3% each - the bad
-# four are back in single-digit visibility (0.8% -> 3.3%, 3.2% -> 13.2% of spawns) while the useful
-# pool still dominates at 86.8% (stock 45.2%). Total weight 24.2, odin/thor/loki were trimmed 7.0 -> 6.0
-# to pay for it. The nerfed four are the ones whose "bad" side scales with the monster curve:
-# enemy_dmg +20%, enemy_hp +25%, MVP +25% HP early, elite guard.
-const MOD_ALTAR_W: = {"odin": 6.0, "thor": 6.0, "loki": 6.0, "yggdrasil": 3.0, "freyja": 0.8, "niflheim": 0.8, "valkyrie": 0.8, "emperium": 0.8}
+# not here. New odds: odin/thor/loki/emperium 6.0 = 20.4% each (measured 200 k rolls of the real loop,
+# work/logs/altar_odds/: 20.47 / 20.34 / 20.41 / 20.39), yggdrasil 3.0 = 10.2% (kept at half the
+# others - it is the only rollable altar with an empty "bad", so the dev's own w=0.3 is a scarcity signal,
+# x10 here is already generous), freyja/niflheim/valkyrie 0.8 = 2.7% each. Total weight 29.4; the reward
+# pool (the five altars whose "good" is a real reward) is 91.9% of spawns - stock 58.9%, or 45.2% if you
+# count Emperium as a debuff altar, which is what v11 did and v15 undoes.
+# EMPERIUM moved 0.8 -> 6.0 in v15 - it was mis-grouped with the "bad four" in v11. Its "bad" is a fight
+# (EMPERIUM_GUARDS = 5 elites from the stage/tower tier pool, altars.gd:761-788) and its "good" is the best
+# payout in the table: a 3-roll bonus-2 MVP Treasure Box (altars.gd:796 -> main.gd:13598) plus +1 level per
+# hero (altars.gd:799-803). That box goes through roll_item()'s normal pool, so it is one of the two altars
+# that can mint Sword Wings (SWORD_WINGS_FARM_GUIDE.md §11). The genuinely bad three are the ones whose
+# "bad" side scales with the monster curve and pays nothing: enemy_dmg +20%, enemy_hp +25%, MVP +25% HP early.
+const MOD_ALTAR_W: = {"odin": 6.0, "thor": 6.0, "loki": 6.0, "yggdrasil": 3.0, "freyja": 0.8, "niflheim": 0.8, "valkyrie": 0.8, "emperium": 6.0}
 # [MOD] Baldur vs Hel are a separate spawn (karma.gd, every KARMA_ALTAR_EVERY from KARMA_ALTAR_FROM):
 # shipped 50/50 pick_random(). 0.75 = three Baldur (heal, +10% HP, +5% dmg, Valhalla route) per Hel
 # (-15% max HP, Niflheim route).

@@ -2,7 +2,8 @@
 
 Reverse-engineered from the **installed** patch layer `effective_0.2.7/` (0.2.7 + our mod v12; the mod
 touches none of the code below — see §7). Every claim is `file:line` verifiable in that tree.
-Verified 2026-11-22. Related: `PATCH_SYSTEM.md` (patch layer / mod pipeline).
+Verified 2026-11-22; §11/§12 (three player-reported findings + mod v15) verified 2026-11-23 against the
+same tree with mod v15 applied. Related: `PATCH_SYSTEM.md` (patch layer / mod pipeline).
 
 ---
 
@@ -150,7 +151,7 @@ qualify, and all of them carry the `bonus > 0` tier floor that produces the ×2 
 | MVP kill (every 10th floor) | `main.gd:12159` | 3 | 2 | ✅ |
 | Tower event: survive / treasure / ambush | `tower_events.gd:617 / 282 / 298` | 3 | 2 / 1 / 1 | ✅ |
 | Generic boss kill | `main.gd:11963` | 3 | 1 | ✅ (needs the 17 460 s target) |
-| **Naght Sieger floor-100 treasure chest** | `main.gd:12148` | 5 | 3 | ❌ forced legendary branch |
+| **Naght Sieger floor-100 treasure chest** | `main.gd:12148` | 5 | 3 | ❌ forced legendary branch — but **the fight hands out Sword Wings anyway: §11.1** |
 | Elite mob | `main.gd:11957` | 1 | 0 | ❌ no tier floor (mostly ×1) |
 | Golden Poring (stage event) | `main.gd:11994` | 5 | 3 | ❌ **not tower-reachable** (`_run_director` returns early: `main.gd:5169-5172`) |
 | Hell herald / tide, late-Hell | `main.gd:15992/16009`, `hell_late.gd:392` | 1–2 | 1 | ❌ gated off in tower (`hell_late.gd:79-83`, `_run_director`) |
@@ -200,18 +201,20 @@ at `equipment.gd:729-733`):
 1. **Class with an empty wings slot.** Guarantees auto-equip → immune to every auto-sell filter, and
    chest-rolled wings do **not** consume your per-class free Naght Sieger grant (only `_found_unique` calls
    `_wings_got` — `main.gd:12212` vs `_wings_due` `main.gd:12234-12239`). Super_novice/taekwon: +40 % odds.
-2. **Uncheck "Moradas" (autosell_purple)** in Settings anyway (`menus.gd:10555`) — belt and braces.
+2. **Uncheck "Moradas" (autosell_purple)** in Settings — **mandatory, not belt-and-braces**: the tier-3 sell
+   branch has no wings exemption, it only never fires while the wings slot is empty (§11.2). `menus.gd:10555`.
 3. **Set tower speed to ×2 on the tower entry screen** (`menus.gd:16577-16614`; locked mid-climb).
 4. Enter the Endless Tower, **clear floor 1** (31 kills: `TOWER_KILLS 30 + 1.0×floor`), **do not enter the
    portal**. `climb` state spawns nothing and the portal never expires (`tower_run.gd:250-262, 387-428`).
 5. **Idle 2 h 25 m 30 s**: no menu open, window focused (minimising auto-pauses = clock stops). Put a timer
    on 2 h 30 m. Nothing scales with elapsed time — `scale_time()` is floor-derived (`tower_run.gd:166-167`).
-6. Climb to the next **floor ≡ 5 (mod 10)** → event. You want **Emperium** (≈1 event in 4–5, ~every 40–50
-   floors). It's 5 × 10 s DPS checks against *your own measured DPS* (`tower_events.gd:208-216`), so it
-   self-scales and stays winnable at floor 1000+: pass 4–5 → **7 or 10 rolls** (`TOWER_EMPERIUM_PRIZES
-   [3,4,5,7,10]`, `tower_events.gd:340-341`).
-7. Non-Emperium event floors: take the chest anyway (survive = bonus 2, treasure/ambush = bonus 1–2), and
-   open **every MVP chest** (bonus 2) while the clock is up.
+6. Climb to the next **floor ≡ 5 (mod 10)** → event. You want **Emperium** — with mod v15 it comes every
+   ~9 floors (§12.2); on stock 0.2.7 it is ≈1 event in 6, ~every 60 floors. It's 5 × 10 s DPS checks against
+   *your own measured DPS* (`tower_events.gd:208-216`), so it self-scales and stays winnable at floor 1000+:
+   pass 4–5 → **12 or 16 rolls** under v15 (`MOD_EMP_PRIZES [5,7,9,12,16]`), 7 or 10 shipped
+   (`TOWER_EMPERIUM_PRIZES [3,4,5,7,10]`), `tower_events.gd:488-494`.
+7. Non-Emperium event floors: take the chest anyway (survive = bonus 2, treasure/ambush = bonus 1–2), open
+   **every MVP chest** (bonus 2), and **every Emperium altar** you channel past (§11.3, bonus 2 + a level).
 8. **Open your chests before hoarding**: ground-chest cap is 12; a 13th absorbs the oldest and clamps rolls
    to 5 (`main.gd:13680-13694`; `MAX_GROUND_CHESTS` `game_data.gd:9941`, `MAX_CHEST_ROLLS` `:9971`). Chests are **not** lost
    on floor change — `"chest"` is excluded from `TOWER_CARRY_COLLECT` and they teleport with you
@@ -235,9 +238,9 @@ at `equipment.gd:729-733`):
   an idle bank is the fastest legal clock per real hour.
 * **Idle *past* the target.** Every extra 180 game-s buys one more rank of headroom, so bonus-1/0 chests
   (bosses, elites) also count — much more chest volume per hour than events alone.
-* **Skip the floor-100 chest hopes.** Naght Sieger's chest is the *only* one that can never roll it
-  (`treasure` ⇒ legendary branch ⇒ `slots 0`). Kill him for the free ×1 pair + the diamond treasure roll, not
-  for a ×2.
+* **Skip the floor-100 chest hopes.** Naght Sieger's *chest* is the only one that can never roll it
+  (`treasure` ⇒ legendary branch ⇒ `slots 0`). Kill him anyway: he awards a **free ×1 pair** by script (§11.1)
+  — but not a ×2.
 * **Want it faster?** The lever is the pool gate, not your DPS: `"rank": 99` is the only reason this needs a
   5-hour run. `MOD_ITEM_W`-style weighting (§9) makes it a normal drop.
 * **Test the stats for free right now:** Kafra **Armory** → any *seen* Sword Wings is handed out at `slots = 3`
@@ -256,7 +259,7 @@ Cheapest change that respects `PATCH_SYSTEM.md` §14/§20 (prefer pure insertion
 
 1. `sword_wings` `"rank": 99` → `6` in `game_data.gd:7258` — eligibility drops to **15 game-min** at bonus 3.
    Keep `rank ≥ 6` so `score()` (`equipment.gd:1026`) doesn't treat it as trash in the bag-overflow path.
-2. `const MOD_ITEM_W: = {"sword_wings": N}` next to `MOD_ALTAR_W` (`game_data.gd:8852`), honoured by
+2. `const MOD_ITEM_W: = {"sword_wings": N}` next to `MOD_ALTAR_W` (`game_data.gd:8857`), honoured by
    appending `N-1` extra ids at **`equipment.gd:726` `pool.append(id)`** — reuses the shipped weapon
    duplication trick (`:730-732`), so `pool.pick_random()` (`:753`) is left untouched.
 3. **Do NOT** add `"legendary": true` — that routes it to `make(pick, 0)` = `slots 0` = the boring ×1.0 version.
@@ -305,3 +308,164 @@ const MOD_EMP_PRIZES: = [5, 7, 9, 12, 16]  # was TOWER_EMPERIUM_PRIZES [3, 4, 5,
   `--deep` round-trip confirms all four hooks in the shipped `.gdc` (`verify/rt/tower_events/`). Two
   `lint-allow.txt` rows added (old `MOD_TAG` v13 line, `return str(pool.pick_random())` — the one shipped
   line rewritten). Install only after a play-test: `./build.sh --install`.
+
+---
+
+## 11. Three player-reported findings, verified in the code (2026-11-23)
+
+### 11.1 "The Naght Sieger floor-100 treasure chest DOES drop Sword Wings" — **confirmed**, and it is not the loot roll
+
+Killing the tower lord on floor 100 (any `TOWER_LORD` floor, i.e. every 100th) does two things at once:
+
+```gdscript
+# core/main.gd:12147-12156
+	if tower != null and e.id == GameData.TOWER_LORD:
+		_drop_chest(e.position, GameData.MAX_CHEST_ROLLS, 3, "", false, false, "", true)   # the 5-roll treasure chest
+		if heroes.any(_wings_due):
+			get_tree().create_timer(1.6, false).timeout.connect(_award_tower_wings.bind(e.position))
+		...
+		party_announce(tr("¡Tesoro de la Torre!"), ..., tr("El tesoro de Naght Sieger es tuyo"))
+```
+
+`_award_tower_wings` (`main.gd:12243-12265`) is a **scripted grant**, 1.6 s after the chest lands:
+
+* `Equipment.make(GameData.TOWER_WINGS, 0)` (`:12249`) — `slots = 0` ⇒ `ITEM_TIERS[0].mult = 1.0` ⇒ **+30 %**, the
+  plain version. No trait, no purple, `bound` irrelevant.
+* routed through `_found_unique` (`:12250-12252`), which opens a *second* chest-reveal window titled
+  **"Alas de la Torre"** (`_open_chest_show(at, 3, [r], …)`) and stores the item to the Kafra
+  (`Save.add_to_storage`, `:12215`) — this is exactly what reads as "the chest dropped the wings".
+* once per **class, forever**: `_wings_due` (`main.gd:12234-12238`) refuses if the pair is already carried or
+  if `Save.tower_wings()` already lists `h.class_id` (`_wings_got` `:12307-12312`); the Kafra repeats it in the
+  refusal text "…cada clase las gana una sola vez" (`menus.gd:24475-24477`), and `save.gd:301-303` re-adds a
+  wing the save is owed. The Hel Tower has its own second grant (`main.gd:12154`, `_award_hel_wings`).
+
+**Reconciled with §5:** the table's ❌ is about the *chest's own 5 rolls* and it still stands — `treasure = true`
+⇒ `chest_legend = 1.0` ⇒ `roll_item` takes the forced-legendary branch ⇒ `make(pick, 0)` and that pool requires
+`"legendary": true`, which `sword_wings` does not have. The two never touch: the award does not consume the
+chest, and the chest cannot produce wings. Consequence for the farm: killing Naght Sieger on a class that has
+not been given its pair is a **free +30 % pair** and does not affect the ×2 hunt at all (§8 step 1 relies on
+this: `_found_unique` is the only caller of `_wings_got`).
+
+### 11.2 "Sword Wings is treated as Mythic" — **confirmed in the UI, absent in the data** (and the autosell reason is different)
+
+`"Mítico"` exists exactly once in the whole build, as a *display* grade chosen before Único/Legendario:
+
+```gdscript
+# ui/menus.gd:10134-10142  (_rarity)
+	if Equipment.item_def(it).get("wings", false):
+		return [GameData.WINGS_COLOR, tr("Mítico")]        # checked BEFORE is_unique / is_legendary
+```
+
+`WINGS_COLOR` is violet (`game_data.gd:7596`), the same precedence is used for world/drop colours
+(`equipment.gd:377-385`), and `sword_wings` is the only item with `wings: true` — so wings sit **above**
+Legendary in the ladder. But there is **no `mythic`/`rarity`/`grade` field**: `is_unique()` and `is_legendary()`
+are both false (`equipment.gd:413-420`).
+
+That is why the auto-sell behaviour you saw has a different cause. The exemptions that *do* carry a wings check
+(`auto_sells` `:1277-1279`, `_repeat_sells` `:1033`, `upgrade_slot` `:1195`) all sit behind `is_legendary()` or
+on the "replace my equipped item" path, so they never see wings. What actually protects it:
+
+```gdscript
+# core/equipment.gd:1149        -> pre-equip sell: legendary items only, wings never qualifies
+# core/equipment.gd:1151-1154  -> empty "wings" slot  -> equipped, returns BEFORE the sell gate at :1169
+# core/equipment.gd:1281-1283  -> the "Moradas" branch is `if tier == 3: return autosell_purple`  (no wings test!)
+```
+
+**Foot-gun this exposes:** with the wings slot **already filled**, a second `slots = 3` pair *does* reach
+`:1169` and **is sold for zeny** by "Moradas" (`autosell_purple`) — the mythic label will not save it. So §8
+step 2 (uncheck Moradas) is mandatory for this farm, not optional. Only the Kafra storage path really does
+guard by id (`menus.gd:24475-24477`, `:23427`, `:23481`).
+
+### 11.3 The Emperium **altar** — the channel-on-it Emperium, and a third Sword Wings mint
+
+`ALTARS["emperium"]` (`game_data.gd:8814-8816`, the block you quoted) is the same object as the tower trial /
+the Festival emperium (`item_emperium`), dressed as an altar:
+
+* **Channelled like every other altar**: stand inside `ALTAR_RADIUS = 1.8` and hold for `ALTAR_CHANNEL = 2.0` s
+  (`altars.gd:111-142`, fill bar; `ALTAR_LIFE = 120` s before it crumbles; spawns every 60-90 game-s, max 5 up).
+* `_accept` (`altars.gd:390-407`) applies `mods` — `guardians` is not a stat key, it is a trigger:
+  `if d.get("mods", {}).has("guardians"): _call_guardians(a.pos)` (`:403-404`).
+* `_call_guardians` (`:761-788`): `EMPERIUM_GUARDS = 5` elites drawn from the *current stage / tower-tier*
+  `events` pool, announced as "Derrótala para ganar la Treasure Box del MVP y un nivel".
+* Kill them all → `_check_guards` (`:791-804`): `world._drop_chest(player.position + …, GameData.CHEST_ROLLS.boss = 3, 2)`
+  **+ 1 level per hero** (`h.grant_levels(1)`).
+
+That box is **not** a `treasure` chest (`treasure = false` ⇒ `chest_legend = 0.0`, `main.gd:14879`), so all 3
+rolls go through `roll_item`'s normal pool with `bonus = 2` ⇒ `n = maxi(n, CHEST_MIN_SLOTS) = 3` ⇒ **it can mint
+the +60 % (tier-3, purple, free trait) Sword Wings**, exactly like §2 — as soon as
+`1 + int(t/180) + 2 >= 99`, i.e. `t >= 17 280` game-s (the bonus-2 row of §4). In the tower that is reachable
+with the idle-banked clock of §8, and the altar spawns there too, so it is a genuine third mint source next to
+the Emperium *event* chest (§5) and any MVP chest.
+
+It was nevertheless weighted **0.8** (3.3 % of altar spawns) by mod v11, because v11 sorted altars by their
+`"bad"` text and this one's "bad" is a fight. That was the wrong axis: the fight is the *reward*. Fixed in
+v15 (§12.1).
+
+---
+
+## 12. mod v15 — Emperium, twice as often, in two places (built `e9e9d9c422cd1297…`, **not installed**)
+
+`MOD_TAG` → `mod-v15 … altar_emp=6.0 … event_w=emperium9 emp_every=9 …` (`player.gd:29`, `enemy.gd:218`).
+v15 keeps all four v14 knobs (`MOD_EVENT_W`, `MOD_EMP_GROW`, `MOD_EMP_TIME`, `MOD_EMP_PRIZES`) unchanged and
+adds two things.
+
+### 12.1 `MOD_ALTAR_W`: emperium 0.8 → **6.0** (`autoload/game_data.gd:8857`)
+
+Measured with the real `spawn()` roll loop over the real `ALTARS` table, 200 k spawns
+(`work/logs/altar_odds/`, `python3 mk_probe.py 0.2.7 && godot --headless --path . -s res://sim.gd`;
+`odds_0.2.7_v13b.txt` = the v11-v14 config, `odds_0.2.7_v15.txt` = now):
+
+| altar | stock | mod v14 | **mod v15** | reward / debuff |
+|---|---|---|---|---|
+| odin | 13.61 % | 24.74 % | **20.47 %** | procs +30 % |
+| thor | 13.76 % | 24.82 % | **20.34 %** | skill dmg + zeny |
+| loki | 13.63 % | 24.74 % | **20.41 %** | card + legendary rolls |
+| **emperium** | 13.72 % | 3.33 % | **20.39 %** | **MVP Treasure Box (3 rolls, bonus 2) + 1 level — §11.3** |
+| yggdrasil | 4.12 % | 12.44 % | **10.27 %** | +1 life, +2 HP/s |
+| freyja / niflheim / valkyrie | ~13.7 % each | 3.3 % each | **2.7 % each** | pure debuff sides |
+
+Reward-pool share (the five altars that pay something) 58.9 % stock → **91.9 %**; the three that only cost you
+something are down to 8.1 % combined. Total weight 24.2 → 29.4, no other id touched.
+
+### 12.2 `MOD_EMP_EVERY = 9`: a hard cadence for the tower's Emperium trial (`core/tower_events.gd:69` + hook in `core/tower_run.gd:576`)
+
+v14's weight could not deliver "one trial every ~9 floors" and no bigger weight can: the gate only opens on
+`floor % 10 == 5` **and** `pick()` refuses the previous kind, so the densest weight-only schedule is one trial
+per 2 event floors. Measured over 2 M floors with the shipped gate + the real `_event_pick`/`pick()`
+(`work/logs/emp_cadence/`, same one-liner as above):
+
+| | trial cadence | median gap | worst gap | emperium / 100 floors | other five kinds / 100 floors |
+|---|---|---|---|---|---|
+| shipped 0.2.7 | **59.9 floors** | 50 | 440 | 1.67 | 1.67 each |
+| mod v14 (`MOD_EVENT_W` 9) | **24.4 floors** | 20 | 130 | 4.10 | 1.18 each |
+| **mod v15 (weights + `MOD_EMP_EVERY` 9)** | **8.89 floors** | **9** | **9** | **11.25** | 1.75 each |
+
+How: `emp_due(f)` keeps the floor of the last trial and answers *yes* once `MOD_EMP_EVERY` floors have passed;
+`tower_run._start_floor()` asks it on **every** floor (the shipped `floor % 10 == 5` test is untouched, so the
+other five kinds keep their own rhythm and actually get *more* common again — 1.18 → 1.75 per 100 floors, because
+the ceiling, not the weight, now supplies the Emperium). `pick_for(floor)` returns the forced kind and also
+re-arms the clock when the weighted roll happens to land on Emperium.
+
+Two details that the measurement earned:
+
+* **MVP floors slide *early*, not late.** A tier-top floor (`floor % 10 == 0`) is claimed by the MVP check first
+  (`tower_run.gd:545`), so a due floor there is lost. Sliding to `f+1` locks the phase onto floors ending in 1
+  and gives a flat **10.00 floors** per trial (measured). So `emp_due` fires at `MOD_EMP_EVERY - 1` when the next
+  floor is a top floor — 8 then 9, 9, 9, … and the ceiling genuinely holds at 9.
+* **The seed**: a fresh climb arms the clock from `TOWER_EVENT_AT - MOD_EMP_EVERY`, so the first trial lands on
+  floor 5 — the shipped first event floor. A climb resumed from a checkpoint (entering at floor 90, say) is
+  instantly "due" and opens with a trial.
+
+Farm consequence with §8: idle-bank the clock, then a 16-roll bonus-3 diamond chest ≈ every 9 floors (25.5 %
+per chest at the mage's 1.82 %/roll), plus the ~20 % of altar spawns that are now Emperium boxes.
+
+Verify in your own climb: `user://mod_probe_events.txt` now also prints **`gap=<x> floors`** — the mean real
+spacing between two Emperium trials since the game started (the probe counters are `static var`s, so it spans
+climbs; the format string was exercised under headless Godot first, v2 lesson). **~9** = the cadence is firing;
+**~24** = the `tower_run.gd:576` hook is not; **`n/a`** = fewer than two trials so far.
+
+Audit: `./mod_apply.sh --check --build --deep` → exit 0, 0 conflicts / 0 moved sites / 0 lint gaps; the deep
+round-trip shows every new line in the built bytecode (`tower_run: every source line present`, `tower_events`
+only the known `MOD_EMP_PRIZES` re-wrap). Three `lint-allow.txt` rows added: the two shipped lines rewritten in
+`tower_run.gd` (the event `elif` and the `_sign_kind` assignment) and the superseded `MOD_TAG` v14 string.
+Install only after a play-test: `./build.sh --install` (or `./update.sh --skip-sync --install`).

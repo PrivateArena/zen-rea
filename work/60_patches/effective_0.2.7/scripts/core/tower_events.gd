@@ -48,9 +48,25 @@ func _init(w: World, t: Node) -> void :
 # and wheel pays no chest at all. Weighted by id, unlisted kinds keep weight 1.0 and the shipped "never
 # twice in a row" filter is kept, so emperium 9.0 -> 9/13 = 69.2% per event floor, 40.9% long run = one
 # every ~24 floors; the other five 1/13 = 7.7% each (was 20%/16.7%). Re-weighting is the cheap lever,
-# not more event floors: that same residue also carries the elite floor (tower_run.gd:581) and the Lucile
+# not more event floors: that same residue also carries the elite floor (tower_run.gd:586) and the Lucile
 # blessing (TOWER_BLESS_FLOOR), and TOWER_TIER_FLOORS itself drives checkpoints, tiers, MVP and camp.
+# v15 keeps this weight as-is and adds the hard cadence floor below, because the two caps above are what
+# the weight is up against: it cannot make a trial appear on a floor the gate does not offer.
 const MOD_EVENT_W: = {"emperium": 9.0}
+# [MOD] Emperium trial CADENCE (a ceiling, not a chance): at least one trial every MOD_EMP_EVERY floors.
+# Weights alone cannot reach the 9 floors asked for - the shipped gate only offers floor % 10 == 5, and
+# pick() refuses to repeat a kind, so even an infinite weight lands one trial per 2 event floors (measured
+# v14: 24.46 floors). TOWER_TIER_FLOORS itself cannot move (checkpoints/tiers/MVP/camp), so tower_run.gd
+# now asks emp_due(floor) on EVERY floor: the first floor MOD_EMP_EVERY floors past the last trial becomes an
+# Emperium floor, and the shipped residue-5 floors keep the other five kinds (their roll is unaffected).
+# If that floor is a tier-top MVP floor - checked first, tower_run.gd:545 - the trial comes one floor EARLY
+# instead of sliding late: sliding late locks the phase onto floors ending in 1 and gives a flat 10.00. Real
+# numbers over 2 M floors with the shipped gate + the real pick() (work/logs/emp_cadence/sim.gd):
+# shipped 59.9 -> v14 (weights only) 24.4 -> v15 8.89 floors per trial (median 9, min 8, worst 9 = the
+# ceiling holds), 56.3% of event floors, and the other five kinds come back to 1.75 per 100 floors (v14 had
+# starved them to 1.18; shipped is 1.67) because the ceiling, not the roll, now supplies the Emperium.
+# MOD_EMP_EVERY = 0 -> v14 behaviour.
+const MOD_EMP_EVERY: = 9
 # [MOD] Emperium test. The check HP is derived from your OWN measured average DPS -- hp = max(500,
 # avg_dps * TOWER_EMPERIUM_DPS 7) * TOWER_EMPERIUM_GROW^_passed -- and must die inside
 # TOWER_EMPERIUM_TIME 10 s, so clearing check k costs current_dps >= avg_dps * 0.7 * 1.7^(k-1) =
@@ -67,6 +83,13 @@ const MOD_EMP_TIME: = 15.0
 const MOD_EMP_PRIZES: = [5, 7, 9, 12, 16]
 static var mod_event_n: = {}
 static var mod_event_rolls: = 0
+# [MOD] measured trial-to-trial spacing of the REAL game (not just of the odds sim) -> the probe line.
+static var mod_emp_floors: = 0.0
+static var mod_emp_gaps: = 0
+# [MOD] floor the last Emperium trial ran on -> the MOD_EMP_EVERY ceiling. -1 = not yet this climb; the lazy
+# seed (TOWER_EVENT_AT - MOD_EMP_EVERY) makes a fresh climb's first trial land on the shipped first event
+# floor, 5. Set on forced AND on rolled trials, so a lucky roll pushes the next forced one back.
+var _emp_floor: = -1
 
 
 func _event_w(k: String) -> float:
@@ -91,8 +114,8 @@ func _event_note(k: String) -> String:
 	mod_event_rolls += 1
 	mod_event_n[k] = int(mod_event_n.get(k, 0)) + 1
 	if mod_event_rolls % 4 == 1:
-		var s: = "events=%d  emperium=%d (P=%.1f%%) " % [mod_event_rolls, int(mod_event_n.get("emperium", 0)), 
-			100.0 * int(mod_event_n.get("emperium", 0)) / maxf(1.0, mod_event_rolls)]
+		var s: = "events=%d  emperium=%d (P=%.1f%%)  gap=%.1f floors  " % [mod_event_rolls, int(mod_event_n.get("emperium", 0)), 
+			100.0 * int(mod_event_n.get("emperium", 0)) / maxf(1.0, mod_event_rolls), mod_emp_floors / maxf(1.0, float(mod_emp_gaps))]
 		for key in mod_event_n.keys():
 			if str(key) == "emperium":
 				continue
@@ -108,6 +131,47 @@ func _event_note(k: String) -> String:
 func pick() -> String:
 	var pool: Array = GameData.TOWER_EVENTS.keys().filter( func(k): return k != kind)
 	return _event_pick(pool)
+
+
+# [MOD] asked on every floor by tower_run.gd _start_floor() (:576): yes => this floor is past the ceiling and
+# must carry an Emperium trial. Deliberately does NOT care what the previous kind was: with MOD_EMP_EVERY 9
+# two forced trials can never be adjacent anyway, and the shipped "never twice in a row" filter in pick()
+# keeps the residue-5 floors varied on their own.
+func emp_due(f: int) -> bool:
+	if MOD_EMP_EVERY <= 0:
+		return false
+	if _emp_floor < 0:
+		_emp_floor = GameData.TOWER_EVENT_AT - MOD_EMP_EVERY
+	var d: = f - _emp_floor
+	if d >= MOD_EMP_EVERY:
+		return true
+	# d == MOD_EMP_EVERY - 1: the due floor is the next one. TowerRun reserves every TOWER_TIER_FLOORS-th
+	# floor for the MVP (_start_floor checks `top` first, tower_run.gd:545), and a trial lost there slides to
+	# f+1 -- which with a 9 floor period locks the phase onto floors ending in 1 and turns every gap into 10
+	# (measured). So come one floor EARLY instead: 8 then 9, 9, 9, ..., never a locked 10.
+	if d == MOD_EMP_EVERY - 1:
+		return (f + 1) % GameData.TOWER_TIER_FLOORS == 0
+	return false
+
+
+# [MOD] the entry point tower_run.gd now calls: the ceiling first, else the weighted roll. Records the floor
+# either way, so the clock restarts from whichever trial you actually got.
+func pick_for(f: int) -> String:
+	var k: = ""
+	if emp_due(f):
+		k = _event_note("emperium")
+	else:
+		k = pick()
+	if k == "emperium":
+		# [MOD] cadence probe: the REAL spacing between two Emperium trials, averaged into the `gap=` field of
+		# _event_note. Static like the counters there, so it spans the game process, not one climb - and a new
+		# climb cannot inject a bogus gap, because its floors start below the previous _emp_floor. Read it as:
+		# ~9 floors = MOD_EMP_EVERY is firing; ~24 = the tower_run.gd:576 hook did not land.
+		if _emp_floor >= 0 and f > _emp_floor:
+			mod_emp_floors += float(f - _emp_floor)
+			mod_emp_gaps += 1
+		_emp_floor = f
+	return k
 
 
 func start(at_floor: int, force: = "") -> String:
