@@ -266,3 +266,42 @@ Cheapest change that respects `PATCH_SYSTEM.md` §14/§20 (prefer pure insertion
 
 Open design question if we build it: cap the tier-awakening stack (`ITEM_TIERS × HEL_WINGS_MULT`) so
 `+60 %` cannot become `+90 %` while we are in there.
+
+---
+
+## 10. mod v14 — raising the Emperium encounter rate (built, **not installed yet**)
+
+Built 2026-11-23 into `out/patch_0.2.7.pck` (sha `6122aba72cdd3933…`, 272 members), `MOD_TAG` →
+`mod-v14 … event_w=emperium9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16]`. Four knobs, all in
+`core/tower_events.gd` (the event file was otherwise pristine except our v5 wheel block):
+
+```gdscript
+const MOD_EVENT_W: = {"emperium": 9.0}      # re-weighted pick in pick() -> _event_pick(pool)
+const MOD_EMP_GROW: = 1.4                   # was TOWER_EMPERIUM_GROW 1.7  (hp growth per check)
+const MOD_EMP_TIME: = 15.0                  # was TOWER_EMPERIUM_TIME   10 s per check
+const MOD_EMP_PRIZES: = [5, 7, 9, 12, 16]  # was TOWER_EMPERIUM_PRIZES [3, 4, 5, 7, 10]
+```
+
+| | shipped | mod v14 |
+|---|---|---|
+| Emperium per event floor (prev ≠ emperium) | 20 % | **69.2 %** |
+| Emperium share of all event floors (never twice in a row) | 16.7 % | **40.9 %** (simulated 400 k draws) |
+| floors between Emperium events | ~60 | **~24** |
+| avg DPS needed to clear checks 1-5 | 0.70 / 1.19 / 2.02 / 3.44 / **5.85** × | 0.47 / 0.65 / 0.91 / 1.28 / **1.79** × |
+| rolls at `_passed` = 1 / 3 / 5 | 3 / 5 / 10 | **5 / 9 / 16** |
+| P(Sword Wings) per Emperium chest (mage, 1.82 %/roll) | 5.4 % | **25.5 %** |
+
+* Why the growth matters: check HP is `max(500, avg_dps × 7) × GROW^_passed` (`tower_events.gd:363`) and the
+  window was 10 s ⇒ shipped 5/5 needs **5.85× your own run-average DPS**, i.e. effectively unreachable
+  except very deep where current DPS ≫ average. Most players bank `_passed = 1` = the 3-roll prize.
+* Cadence untouched on purpose: event floors stay `floor % 10 == 5`, because that residue also carries the
+  elite floor (`tower_run.gd:581`) and Lucile's blessing (`TOWER_BLESS_FLOOR`), and `TOWER_TIER_FLOORS`
+  itself drives checkpoints/tiers/MVP/camp.
+* Verify on your own climb: `user://mod_probe_events.txt` (+ `MODPROBE events:` in the log) counts the
+  real draws, same pattern as the wheel probe.
+* Combined with §8: idle-bank the clock (17 460 game-s) → ~1 Emperium per 24 floors → 16-roll chest at
+  25 % per win ≈ a few chests. Revert any time with `./build.sh --restore`.
+* Audit trail: `./mod_apply.sh --check --build --deep` → exit 0, 0 conflicts / 0 moved sites / 0 lint gaps;
+  `--deep` round-trip confirms all four hooks in the shipped `.gdc` (`verify/rt/tower_events/`). Two
+  `lint-allow.txt` rows added (old `MOD_TAG` v13 line, `return str(pool.pick_random())` — the one shipped
+  line rewritten). Install only after a play-test: `./build.sh --install`.

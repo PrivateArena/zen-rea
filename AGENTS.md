@@ -103,7 +103,18 @@ cd work/60_patches && ./update.sh --dry-run      # what the next official patch 
 
 ## Log
 
-**2026-11-22 (latest)** — **Documented the "+60 % Sword Wings" case → `work/60_patches/SWORD_WINGS_FARM_GUIDE.md`.**
+**2026-11-23** — **mod v14: Emperium event odds (built `6122aba72cdd3933…`, NOT installed pending play-test)** —
+player hit a bug-made `slots=3` Sword Wings (+60% = `ITEM_TIERS[slots].mult` × base mods); full forensic write-up
+in `work/60_patches/SWORD_WINGS_FARM_GUIDE.md` (§1-9: the `roll_item` bug, why auto-sell missed it, the run-clock
+math, tower chest sources, per-class odds, the idle-the-clock farm). §10 = this release: 4 new knobs in
+`core/tower_events.gd` — `MOD_EVENT_W {emperium:9}` (pick() → `_event_pick`: 20% → 69.2% per event floor,
+16.7% → 40.9% long run = one per ~24 floors), `MOD_EMP_GROW 1.4` + `MOD_EMP_TIME 15` (check gate was
+0.7/1.19/2.02/3.44/**5.85**× own avg DPS in 10 s → now 0.47/0.65/0.91/1.28/**1.79**×) and `MOD_EMP_PRIZES
+[5,7,9,12,16]` → P(wings)/chest 5.4% → 25.5%. One shipped line rewritten (`return str(pool.pick_random())`),
+2 `lint-allow.txt` rows, `MOD_TAG` v13 → v14 in `player.gd:29` + `enemy.gd:218`. Probe `user://mod_probe_events.txt`.
+`./mod_apply.sh --check --build --deep` = exit 0, 0/0/0.
+
+**2026-11-22 ** — **Documented the "+60 % Sword Wings" case → `work/60_patches/SWORD_WINGS_FARM_GUIDE.md`.**
 Player-reported 2×-mods wings (dmg/hp 0.3→0.6, aspd/haste 0.2→0.4, move 0.1→0.2) is *not* a second item:
 there is exactly one `slot: wings` def (`sword_wings`, `game_data.gd:7258`) and `_base_mods`
 multiplies every mod by `ITEM_TIERS[it.slots].mult` (`equipment.gd:596`, mults 1.0/1.3/1.6/**2.0**).

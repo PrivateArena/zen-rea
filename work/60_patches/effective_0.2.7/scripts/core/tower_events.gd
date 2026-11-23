@@ -40,9 +40,74 @@ func _init(w: World, t: Node) -> void :
 
 
 
+# [MOD] Tower event floors (floor % 10 == 5) picked uniformly over GameData.TOWER_EVENTS minus the
+# previous kind: 1/5 = 20% Emperium per event floor, 0% on the floor right after one, i.e. 1/6 = 16.7%
+# of event floors in the long run -> one Emperium every ~60 floors. Emperium is the only event that pays
+# a bonus-3 diamond chest (_prize: 3/4/5/7/10 rolls, the ONLY bonus-3 source inside the tower); treasure
+# and survive top out at bonus 2, ambush at 1, duel pays through the MVP kill (main.gd:12159, 3 rolls)
+# and wheel pays no chest at all. Weighted by id, unlisted kinds keep weight 1.0 and the shipped "never
+# twice in a row" filter is kept, so emperium 9.0 -> 9/13 = 69.2% per event floor, 40.9% long run = one
+# every ~24 floors; the other five 1/13 = 7.7% each (was 20%/16.7%). Re-weighting is the cheap lever,
+# not more event floors: that same residue also carries the elite floor (tower_run.gd:581) and the Lucile
+# blessing (TOWER_BLESS_FLOOR), and TOWER_TIER_FLOORS itself drives checkpoints, tiers, MVP and camp.
+const MOD_EVENT_W: = {"emperium": 9.0}
+# [MOD] Emperium test. The check HP is derived from your OWN measured average DPS -- hp = max(500,
+# avg_dps * TOWER_EMPERIUM_DPS 7) * TOWER_EMPERIUM_GROW^_passed -- and must die inside
+# TOWER_EMPERIUM_TIME 10 s, so clearing check k costs current_dps >= avg_dps * 0.7 * 1.7^(k-1) =
+# 0.70 / 1.19 / 2.02 / 3.44 / 5.85. Early-mid in a climb current ~= avg, so players bank _passed = 1 and
+# the 3-roll prize; only a very deep climb (where avg lags far behind) ever reaches the 7/10 rungs.
+# MOD_EMP_GROW 1.4 + MOD_EMP_TIME 15.0 -> 0.47 / 0.65 / 0.91 / 1.28 / 1.79 of avg_dps: 5/5 becomes a
+# mid-climb achievement instead of an endgame one, and it stays a race rather than a giveaway.
+# MOD_EMP_PRIZES [5,7,9,12,16] (was [3,4,5,7,10]) raises the reward at the _passed you actually reach;
+# rolls > 5 is not clamped when the chest opens (only past the 12-chest ground cap, main.gd:13691). At
+# the measured 1.82%/roll of a Sword Wings in a deep-run chest (SWORD_WINGS_FARM_GUIDE.md §6), 16 rolls
+# = 25.5% for one, vs 5.4% under the shipped 3-roll prize.
+const MOD_EMP_GROW: = 1.4
+const MOD_EMP_TIME: = 15.0
+const MOD_EMP_PRIZES: = [5, 7, 9, 12, 16]
+static var mod_event_n: = {}
+static var mod_event_rolls: = 0
+
+
+func _event_w(k: String) -> float:
+	return float(MOD_EVENT_W.get(k, 1.0))
+
+
+func _event_pick(pool: Array) -> String:
+	var total: = 0.0
+	for k in pool:
+		total += _event_w(str(k))
+	var r: = randf() * total
+	for k in pool:
+		r -= _event_w(str(k))
+		if r <= 0.0:
+			return _event_note(str(k))
+	return _event_note(str(pool[0]))
+
+
+# [MOD] measured event odds -> user://mod_probe_events.txt (also printed), so the new numbers above are
+# checkable from your own climb.
+func _event_note(k: String) -> String:
+	mod_event_rolls += 1
+	mod_event_n[k] = int(mod_event_n.get(k, 0)) + 1
+	if mod_event_rolls % 4 == 1:
+		var s: = "events=%d  emperium=%d (P=%.1f%%) " % [mod_event_rolls, int(mod_event_n.get("emperium", 0)), 
+			100.0 * int(mod_event_n.get("emperium", 0)) / maxf(1.0, mod_event_rolls)]
+		for key in mod_event_n.keys():
+			if str(key) == "emperium":
+				continue
+			s += "%s=%d " % [key, mod_event_n[key]]
+		print("MODPROBE events: ", s)
+		var f: = FileAccess.open("user://mod_probe_events.txt", FileAccess.WRITE)
+		if f != null:
+			f.store_string(s + "\nat=" + Time.get_datetime_string_from_system() + "\n")
+			f.close()
+	return k
+
+
 func pick() -> String:
 	var pool: Array = GameData.TOWER_EVENTS.keys().filter( func(k): return k != kind)
-	return str(pool.pick_random())
+	return _event_pick(pool)
 
 
 func start(at_floor: int, force: = "") -> String:
@@ -363,6 +428,11 @@ func _rise_emperium() -> void :
 	_emperium.max_hp = maxf(500.0, dps * GameData.TOWER_EMPERIUM_DPS) * pow(GameData.TOWER_EMPERIUM_GROW, _passed)
 	_emperium.hp = _emperium.max_hp
 	_left = GameData.TOWER_EMPERIUM_TIME
+	# [MOD] re-state the two shipped lines with our own growth/window (see MOD_EMP_* above); hp is set
+	# from max_hp on the line below, and scale_enemy already ran at spawn, so nothing re-scales after.
+	_emperium.max_hp = maxf(500.0, dps * GameData.TOWER_EMPERIUM_DPS) * pow(MOD_EMP_GROW, _passed)
+	_emperium.hp = _emperium.max_hp
+	_left = MOD_EMP_TIME
 	if _emperium.visual is Node3D:
 
 		(_emperium.visual as Node3D).scale *= 1.2 + 0.2 * _passed
@@ -420,6 +490,7 @@ func _prize() -> void :
 		_finish(0, 0, tr("Sin premio"), tr("El Emperium resistió"))
 		return
 	var rolls: = int(GameData.TOWER_EMPERIUM_PRIZES[mini(_passed, GameData.TOWER_EMPERIUM_PRIZES.size()) - 1])
+	rolls = int(MOD_EMP_PRIZES[clampi(_passed, 1, MOD_EMP_PRIZES.size()) - 1])	# [MOD] was [3,4,5,7,10]
 	_finish(rolls, 3, tr("¡%d de %d pruebas!") % [_passed, GameData.TOWER_EMPERIUM_CHECKS], tr("Cofre de diamante: %d objetos") % rolls, GameData.CHEST_DIAMOND)
 
 
