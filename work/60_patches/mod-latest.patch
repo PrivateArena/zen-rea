@@ -1,25 +1,27 @@
-diff --git a/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd b/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd
-index 3a82d14..1e4ce16 100644
---- a/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd
-+++ b/work/60_patches/effective_0.2.7/scripts/autoload/game_data.gd
-@@ -1522,8 +1522,15 @@ const COSMETIC_RARITY: = {
+diff --git a/work/60_patches/effective_0.2.12/scripts/autoload/game_data.gd b/work/60_patches/effective_0.2.12/scripts/autoload/game_data.gd
+index 99431c4..0db18e8 100644
+--- a/work/60_patches/effective_0.2.12/scripts/autoload/game_data.gd
++++ b/work/60_patches/effective_0.2.12/scripts/autoload/game_data.gd
+@@ -1628,9 +1628,17 @@ const COSMETIC_RARITY: = {
  
  
  
-+# [MOD] Cosmetic gacha rarity table. Shipped: common .69 / rare .22 / epic .075 / legendary .01 /
++# [MOD] Cosmetic gacha rarity table. Shipped (0.2.11): common .69 / rare .22 / epic .075 / legendary .01 /
 +# unique .005. The cut comes out of common, redistributed up the ladder (common alone was 69% of
 +# spins). Must keep summing to 1.00: gacha_panel.gd roll() walks unique->common subtracting each
 +# weight from randf(), so a sum above 1 makes the lower tiers unreachable and a sum below 1 leaks
 +# the remainder into common. Both the roll and the "Probabilidades" list read this one dict, so the
-+# UI always shows the real odds. pity/epic_pity untouched: with legendary at 10% the 12-spin
-+# hard-pity and the 5-spin epic pity are now rarely the reason a good item drops.
- const GACHA: = {"coins": 5, "zeny": 20000000, "dupe_coins": 1, "pity": 12, "epic_pity": 5, 
++# UI always shows the real odds. pity/epic_pity/dupe_coins untouched (0.2.11 turned dupe_coins into a
++# per-rarity refund table): with legendary at 10% the 12-spin hard-pity and the 5-spin epic pity are
++# now rarely the reason a good item drops.
+ const GACHA: = {"coins": 5, "zeny": 20000000, "pity": 12, "epic_pity": 5, 
+ 	"dupe_coins": {"common": 1, "rare": 2, "epic": 3, "legendary": 5, "unique": 5}, 
 -	"odds": {"common": 0.69, "rare": 0.22, "epic": 0.075, "legendary": 0.01, "unique": 0.005}}
 +	"odds": {"common": 0.40, "rare": 0.30, "epic": 0.15, "legendary": 0.10, "unique": 0.05}}
- const COSMETICS: = {
- 	"poring_hat": {"name": "Poring Hat", "slot": "top", "view": "hat_c_poring_hat", "rarity": "common"}, 
- 	"lunatic_hat": {"name": "Lunatic Hat", "slot": "top", "view": "hat_c_lunatic_hat", "rarity": "common"}, 
-@@ -6097,6 +6104,13 @@ const GEAR_GRADE_COST_DEFAULT: = 0.5
+ 
+ 
+ 
+@@ -6671,6 +6679,13 @@ const GEAR_GRADE_COST_DEFAULT: = 0.5
  const GRADE_PITY: = 0.025
  const GRADE_CHANCE_MAX: = 0.75
  const GRADE_PITY_MAX: = 40
@@ -33,7 +35,7 @@ index 3a82d14..1e4ce16 100644
  
  
  
-@@ -6112,6 +6126,9 @@ const HARMONY_SHARE: = [0.0, 0.03, 0.06, 0.1, 0.15, 0.2]
+@@ -6686,6 +6701,9 @@ const HARMONY_SHARE: = [0.0, 0.03, 0.06, 0.1, 0.15, 0.2]
  
  static func grade_chance(g: int, pity: int) -> float:
  	var base: = float(WEAPON_GRADES[clampi(g, 1, WEAPON_GRADES.size() - 1)].chance)
@@ -43,7 +45,7 @@ index 3a82d14..1e4ce16 100644
  	return maxf(base, minf(base + GRADE_PITY * clampi(pity, 0, GRADE_PITY_MAX), GRADE_CHANCE_MAX))
  
  
-@@ -8821,6 +8838,27 @@ const ALTARS: = {
+@@ -9601,6 +9619,27 @@ const ALTARS: = {
  
  
  
@@ -71,10 +73,10 @@ index 3a82d14..1e4ce16 100644
  const HYPNO_AT: = [150.0, 330.0, 510.0]
  const HYPNO_ENDLESS_EVERY: = 180.0
  const HYPNO_LIFE: = 120.0
-diff --git a/work/60_patches/effective_0.2.7/scripts/core/altars.gd b/work/60_patches/effective_0.2.7/scripts/core/altars.gd
+diff --git a/work/60_patches/effective_0.2.12/scripts/core/altars.gd b/work/60_patches/effective_0.2.12/scripts/core/altars.gd
 index 8012a26..99a0c91 100644
---- a/work/60_patches/effective_0.2.7/scripts/core/altars.gd
-+++ b/work/60_patches/effective_0.2.7/scripts/core/altars.gd
+--- a/work/60_patches/effective_0.2.12/scripts/core/altars.gd
++++ b/work/60_patches/effective_0.2.12/scripts/core/altars.gd
 @@ -245,11 +245,11 @@ func spawn(force: = "", where: = Vector3.INF) -> void :
  	var ids: = GameData.ALTARS.keys().filter( func(id): return not GameData.ALTARS[id].has("npc") and not GameData.ALTARS[id].has("karma"))
  	var total: = 0.0
@@ -89,11 +91,11 @@ index 8012a26..99a0c91 100644
  		if r <= 0.0:
  			pick = id
  			break
-diff --git a/work/60_patches/effective_0.2.7/scripts/core/enemy.gd b/work/60_patches/effective_0.2.7/scripts/core/enemy.gd
-index cbe73b6..6ae421a 100644
---- a/work/60_patches/effective_0.2.7/scripts/core/enemy.gd
-+++ b/work/60_patches/effective_0.2.7/scripts/core/enemy.gd
-@@ -210,6 +210,15 @@ func _init() -> void :
+diff --git a/work/60_patches/effective_0.2.12/scripts/core/enemy.gd b/work/60_patches/effective_0.2.12/scripts/core/enemy.gd
+index 50ac4d7..f892bb2 100644
+--- a/work/60_patches/effective_0.2.12/scripts/core/enemy.gd
++++ b/work/60_patches/effective_0.2.12/scripts/core/enemy.gd
+@@ -244,6 +244,15 @@ func _init() -> void :
  
  
  
@@ -102,14 +104,14 @@ index cbe73b6..6ae421a 100644
 +const MOD_TIME_SCALE_CAP: = 3.0
 +# [MOD] one-shot proof that this (patch-layer) script is the one the running process loaded.
 +# Enemy.setup() fires on every spawn in every mode, so the probe lands within seconds of a run start.
-+const MOD_TAG: = "mod-v15 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16]"
++const MOD_TAG: = "mod-v16 on 0.2.12 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16]"
 +static var mod_probe_done: = false
 +static var mod_probe_spawns: = 0
 +static var mod_clock_capped: = 0
  const NO_RANGED: = {}
  var _ranged: Dictionary = NO_RANGED
  
-@@ -227,7 +236,28 @@ var _touch_wait: = {}
+@@ -261,7 +270,28 @@ var _touch_wait: = {}
  func setup(p_id: String, hp_scale: float, renderer: MobRenderer = null, time_scale: = -1.0, own_sprite: = false) -> void :
  	if time_scale < 0.0:
  		time_scale = hp_scale
@@ -138,11 +140,11 @@ index cbe73b6..6ae421a 100644
  	def = GameData.MONSTERS[id]
  	cc_dr = {}
  
-diff --git a/work/60_patches/effective_0.2.7/scripts/core/equipment.gd b/work/60_patches/effective_0.2.7/scripts/core/equipment.gd
-index 255899d..d461882 100644
---- a/work/60_patches/effective_0.2.7/scripts/core/equipment.gd
-+++ b/work/60_patches/effective_0.2.7/scripts/core/equipment.gd
-@@ -527,9 +527,23 @@ func refinable_now() -> Array[String]:
+diff --git a/work/60_patches/effective_0.2.12/scripts/core/equipment.gd b/work/60_patches/effective_0.2.12/scripts/core/equipment.gd
+index 513fbbe..8a38aad 100644
+--- a/work/60_patches/effective_0.2.12/scripts/core/equipment.gd
++++ b/work/60_patches/effective_0.2.12/scripts/core/equipment.gd
+@@ -567,9 +567,23 @@ func refinable_now() -> Array[String]:
  	return out
  
  
@@ -167,10 +169,10 @@ index 255899d..d461882 100644
  
  
  
-diff --git a/work/60_patches/effective_0.2.7/scripts/core/karma.gd b/work/60_patches/effective_0.2.7/scripts/core/karma.gd
-index 8d06b3c..cc824e0 100644
---- a/work/60_patches/effective_0.2.7/scripts/core/karma.gd
-+++ b/work/60_patches/effective_0.2.7/scripts/core/karma.gd
+diff --git a/work/60_patches/effective_0.2.12/scripts/core/karma.gd b/work/60_patches/effective_0.2.12/scripts/core/karma.gd
+index 49b4cfa..14f203f 100644
+--- a/work/60_patches/effective_0.2.12/scripts/core/karma.gd
++++ b/work/60_patches/effective_0.2.12/scripts/core/karma.gd
 @@ -164,7 +164,7 @@ func tick(delta: float, pace: float) -> void :
  		if _altar_t <= 0.0:
  			_altar_t = randf_range(GameData.KARMA_ALTAR_EVERY[0], GameData.KARMA_ALTAR_EVERY[1])
@@ -180,10 +182,10 @@ index 8d06b3c..cc824e0 100644
  
  
  
-diff --git a/work/60_patches/effective_0.2.7/scripts/core/main.gd b/work/60_patches/effective_0.2.7/scripts/core/main.gd
-index 3bb23de..b0ca234 100644
---- a/work/60_patches/effective_0.2.7/scripts/core/main.gd
-+++ b/work/60_patches/effective_0.2.7/scripts/core/main.gd
+diff --git a/work/60_patches/effective_0.2.12/scripts/core/main.gd b/work/60_patches/effective_0.2.12/scripts/core/main.gd
+index ca67adc..a2ac049 100644
+--- a/work/60_patches/effective_0.2.12/scripts/core/main.gd
++++ b/work/60_patches/effective_0.2.12/scripts/core/main.gd
 @@ -268,6 +268,17 @@ func oath_mats() -> float:
  
  
@@ -202,7 +204,7 @@ index 3bb23de..b0ca234 100644
  func star_crumb_chance(e: Enemy) -> float:
  	if e.def.get("mvp", false):
  		return GameData.STAR_CRUMB_MVP
-@@ -11965,7 +11976,7 @@ func _kill(e: Enemy) -> void :
+@@ -12775,7 +12786,7 @@ func _kill(e: Enemy) -> void :
  		titles.mvp_feats(self)
  
  
@@ -211,7 +213,7 @@ index 3bb23de..b0ca234 100644
  	if crumbs > 0:
  		for i in crumbs:
  			gain_material("star_crumb")
-@@ -11985,7 +11996,7 @@ func _kill(e: Enemy) -> void :
+@@ -12795,7 +12806,7 @@ func _kill(e: Enemy) -> void :
  
  
  		_drop_ore(e.position, _mat_count(GameData.GOLD_PORING_ORES, mats))
@@ -220,10 +222,10 @@ index 3bb23de..b0ca234 100644
  			gain_material("star_crumb")
  			number(e.position + Vector3(0, 2.6, 0), tr("¡Star Crumb!"), GameData.POTENTIAL_TIERS[2].color, true)
  		if not training and randf() < GameData.GOLD_PORING_COIN * drop:
-diff --git a/work/60_patches/effective_0.2.7/scripts/core/player.gd b/work/60_patches/effective_0.2.7/scripts/core/player.gd
-index ddc5a77..536fad8 100644
---- a/work/60_patches/effective_0.2.7/scripts/core/player.gd
-+++ b/work/60_patches/effective_0.2.7/scripts/core/player.gd
+diff --git a/work/60_patches/effective_0.2.12/scripts/core/player.gd b/work/60_patches/effective_0.2.12/scripts/core/player.gd
+index e8f5a5c..9e51a07 100644
+--- a/work/60_patches/effective_0.2.12/scripts/core/player.gd
++++ b/work/60_patches/effective_0.2.12/scripts/core/player.gd
 @@ -1,6 +1,33 @@
  class_name Player
  extends Node3D
@@ -253,13 +255,13 @@ index ddc5a77..536fad8 100644
 +# the Lv 443 / 40-minute mark (35.3M -> 53.0M XP), not +50%. It also raises Class Lv, because Class
 +# EXP is roundi(xp_gained), which this feeds. See PATCH_SYSTEM.md §14.
 +const MOD_XP_MULT: = 1.5
-+const MOD_TAG: = "mod-v15 on 0.2.7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16]"
++const MOD_TAG: = "mod-v16 on 0.2.12 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16]"
 +
  
  signal leveled_up
  signal died
-@@ -3916,6 +3943,29 @@ func take_damage(amount: float, world: World, from: Enemy = null, pierce: = fals
- 		amount = maxf(1.0, amount * (1.0 - damage_reduction()) * (1.0 - vit_cut))
+@@ -4354,6 +4381,29 @@ func take_damage(amount: float, world: World, from: Enemy = null, pierce: = fals
+ 			return
  
  
 +	# [MOD] apply the ceiling after all mitigation, before shields absorb, so the number the meter and
@@ -288,7 +290,7 @@ index ddc5a77..536fad8 100644
  	if not touch and not hazard and effects.has("hit_shield") and world.clock >= _gryphon_at:
  
  		_gryphon_at = world.clock + GameData.GRYPHON_GUARD_CD
-@@ -5366,6 +5416,7 @@ func grant_levels(n: int) -> void :
+@@ -5908,6 +5958,7 @@ func unpicked_levels() -> int:
  
  func add_xp(amount: float) -> void :
  	amount *= pace_xp
@@ -296,7 +298,7 @@ index ddc5a77..536fad8 100644
  	xp_gained += amount * xp_mult
  	xp += amount * xp_mult
  	while xp >= xp_need:
-@@ -5542,6 +5593,11 @@ func _roll_rarity(o: Dictionary) -> void :
+@@ -6087,6 +6138,11 @@ func _roll_rarity(o: Dictionary, worth: = 1) -> void :
  	var w: Array[float] = []
  	for t in table:
  		w.append(float(t.w))
@@ -308,7 +310,7 @@ index ddc5a77..536fad8 100644
  	var shift: = minf(w[0] - 20.0, GameData.CHOICE_LUK_SHIFT * eff_stat("luk"))
  	w[0] -= shift
  	for i in range(1, w.size()):
-@@ -5561,6 +5617,19 @@ func _roll_rarity(o: Dictionary) -> void :
+@@ -6106,6 +6162,19 @@ func _roll_rarity(o: Dictionary, worth: = 1) -> void :
  	if o.kind == "stat":
  		steps = mini(steps, GameData.STAT_HARD_CAP - cur)
  	o["rarity"] = tier
@@ -328,10 +330,10 @@ index ddc5a77..536fad8 100644
  	o["from"] = cur
  	o["level"] = cur + steps
  
-diff --git a/work/60_patches/effective_0.2.7/scripts/core/potential.gd b/work/60_patches/effective_0.2.7/scripts/core/potential.gd
+diff --git a/work/60_patches/effective_0.2.12/scripts/core/potential.gd b/work/60_patches/effective_0.2.12/scripts/core/potential.gd
 index bfe6737..00db96a 100644
---- a/work/60_patches/effective_0.2.7/scripts/core/potential.gd
-+++ b/work/60_patches/effective_0.2.7/scripts/core/potential.gd
+--- a/work/60_patches/effective_0.2.12/scripts/core/potential.gd
++++ b/work/60_patches/effective_0.2.12/scripts/core/potential.gd
 @@ -10,6 +10,37 @@ extends RefCounted
  
  const LINES: = 3
@@ -426,10 +428,10 @@ index bfe6737..00db96a 100644
  	return up
  
  
-diff --git a/work/60_patches/effective_0.2.7/scripts/core/tower_events.gd b/work/60_patches/effective_0.2.7/scripts/core/tower_events.gd
+diff --git a/work/60_patches/effective_0.2.12/scripts/core/tower_events.gd b/work/60_patches/effective_0.2.12/scripts/core/tower_events.gd
 index 0a3b5e6..b8e9bbd 100644
---- a/work/60_patches/effective_0.2.7/scripts/core/tower_events.gd
-+++ b/work/60_patches/effective_0.2.7/scripts/core/tower_events.gd
+--- a/work/60_patches/effective_0.2.12/scripts/core/tower_events.gd
++++ b/work/60_patches/effective_0.2.12/scripts/core/tower_events.gd
 @@ -40,9 +40,138 @@ func _init(w: World, t: Node) -> void :
  
  
@@ -648,10 +650,10 @@ index 0a3b5e6..b8e9bbd 100644
  
  func _wheel_show(id: String) -> void :
  	var e: Dictionary = tower.wheel_entry(id)
-diff --git a/work/60_patches/effective_0.2.7/scripts/core/tower_run.gd b/work/60_patches/effective_0.2.7/scripts/core/tower_run.gd
-index ef1fe7d..5fe345c 100644
---- a/work/60_patches/effective_0.2.7/scripts/core/tower_run.gd
-+++ b/work/60_patches/effective_0.2.7/scripts/core/tower_run.gd
+diff --git a/work/60_patches/effective_0.2.12/scripts/core/tower_run.gd b/work/60_patches/effective_0.2.12/scripts/core/tower_run.gd
+index bb55904..76a3ba7 100644
+--- a/work/60_patches/effective_0.2.12/scripts/core/tower_run.gd
++++ b/work/60_patches/effective_0.2.12/scripts/core/tower_run.gd
 @@ -1,6 +1,12 @@
  class_name TowerRun
  extends Node
@@ -706,10 +708,10 @@ index ef1fe7d..5fe345c 100644
  	e.speed *= (1.0 + minf(GameData.TOWER_SPEED_MAX, GameData.TOWER_SPEED_STEP * f) + GameData.TOWER_CYCLE_SPEED * cycle_of(floor))\
  	* (1.0 if mvp else float(r.get("speed", 1.0)))
  	if r.has("scale") and not mvp and e.visual is Node3D:
-diff --git a/work/60_patches/effective_0.2.7/scripts/core/tower_traps.gd b/work/60_patches/effective_0.2.7/scripts/core/tower_traps.gd
+diff --git a/work/60_patches/effective_0.2.12/scripts/core/tower_traps.gd b/work/60_patches/effective_0.2.12/scripts/core/tower_traps.gd
 index ddc02ac..0a8aca4 100644
---- a/work/60_patches/effective_0.2.7/scripts/core/tower_traps.gd
-+++ b/work/60_patches/effective_0.2.7/scripts/core/tower_traps.gd
+--- a/work/60_patches/effective_0.2.12/scripts/core/tower_traps.gd
++++ b/work/60_patches/effective_0.2.12/scripts/core/tower_traps.gd
 @@ -7,6 +7,16 @@ extends RefCounted
  
  const DODGE_HEAL: = 0.02

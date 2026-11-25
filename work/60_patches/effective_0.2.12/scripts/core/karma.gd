@@ -164,7 +164,7 @@ func tick(delta: float, pace: float) -> void :
 		if _altar_t <= 0.0:
 			_altar_t = randf_range(GameData.KARMA_ALTAR_EVERY[0], GameData.KARMA_ALTAR_EVERY[1])
 			if not world.altars.waiting.any( func(a): return GameData.ALTARS[a.id].has("karma")):
-				world.altars.spawn(["baldur", "hel"].pick_random())
+				world.altars.spawn("baldur" if randf() < GameData.MOD_KARMA_BALDUR else "hel")
 
 
 

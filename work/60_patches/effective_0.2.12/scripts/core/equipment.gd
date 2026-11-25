@@ -567,9 +567,23 @@ func refinable_now() -> Array[String]:
 	return out
 
 
+# [MOD] Refine success boost. REFINE_RATES is indexed by the item's CURRENT +N (w1 ends [..., 0.6, 0.4,
+# 0.19], w4/armor end [..., 0.2, 0.2, 0.09]), and this function is the ONLY source of that number: it feeds
+# the in-run smith roll (Equipment.try_refine, with the SMITH_REFINE_LUCK pity on top), the Nakurusa roll
+# (through _ore_chance, which then adds the Enriched/HD material bonus), the in-run equipment gauge, the
+# refiner's "% de éxito" label and the Automatic material picker - so every percentage shown stays true.
+# maxf() guarantees we are never worse than shipped; MOD_REFINE_CAP keeps the top steps from becoming free
+# (+9 -> +10: w1 19% -> 38%, w4/armor 9% -> 18%; a 0.6 mid step -> the 85% cap).
+# REFINE_RATES is deliberately NOT edited: Equipment.refine_safe() reads that table directly, so the
+# "seguro hasta +N" text, the x5 protect fee trigger and the break warnings remain exactly as shipped.
+const MOD_REFINE_MULT: = 2.0
+const MOD_REFINE_CAP: = 0.85
+
+
 static func refine_chance(it: Dictionary) -> float:
 	var table: Array = GameData.REFINE_RATES[_rate_key(it)]
-	return float(table[clampi(int(it.refine), 0, table.size() - 1)])
+	var shipped: = float(table[clampi(int(it.refine), 0, table.size() - 1)])
+	return maxf(shipped, minf(MOD_REFINE_CAP, shipped * MOD_REFINE_MULT))
 
 
 

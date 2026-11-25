@@ -1628,9 +1628,17 @@ const COSMETIC_RARITY: = {
 
 
 
+# [MOD] Cosmetic gacha rarity table. Shipped (0.2.11): common .69 / rare .22 / epic .075 / legendary .01 /
+# unique .005. The cut comes out of common, redistributed up the ladder (common alone was 69% of
+# spins). Must keep summing to 1.00: gacha_panel.gd roll() walks unique->common subtracting each
+# weight from randf(), so a sum above 1 makes the lower tiers unreachable and a sum below 1 leaks
+# the remainder into common. Both the roll and the "Probabilidades" list read this one dict, so the
+# UI always shows the real odds. pity/epic_pity/dupe_coins untouched (0.2.11 turned dupe_coins into a
+# per-rarity refund table): with legendary at 10% the 12-spin hard-pity and the 5-spin epic pity are
+# now rarely the reason a good item drops.
 const GACHA: = {"coins": 5, "zeny": 20000000, "pity": 12, "epic_pity": 5, 
 	"dupe_coins": {"common": 1, "rare": 2, "epic": 3, "legendary": 5, "unique": 5}, 
-	"odds": {"common": 0.69, "rare": 0.22, "epic": 0.075, "legendary": 0.01, "unique": 0.005}}
+	"odds": {"common": 0.40, "rare": 0.30, "epic": 0.15, "legendary": 0.10, "unique": 0.05}}
 
 
 
@@ -6671,6 +6679,13 @@ const GEAR_GRADE_COST_DEFAULT: = 0.5
 const GRADE_PITY: = 0.025
 const GRADE_CHANCE_MAX: = 0.75
 const GRADE_PITY_MAX: = 40
+# [MOD] Grade success boost, one multiplier per TARGET tier (index 1..5 = D C B A S over
+# WEAPON_GRADES[].chance = .90 / .70 / .50 / .35 / .25). Applied inside grade_chance() below, so the roll,
+# the "% de éxito" label, the post-failure hint and the hover-card pity delta all move together. Result:
+# D 90% (unchanged), C 80.5%, B 75%, A 70%, S 65% - still monotone, still paid for in ore and zeny, but the
+# expected attempts for an S drop from ~3.3 to ~1.6. MOD_GRADE_CAP leaves headroom for the shipped pity.
+const MOD_GRADE_MULT: = [1.0, 1.15, 1.5, 2.0, 2.6]
+const MOD_GRADE_CAP: = 0.85
 
 
 
@@ -6686,6 +6701,9 @@ const HARMONY_SHARE: = [0.0, 0.03, 0.06, 0.1, 0.15, 0.2]
 
 static func grade_chance(g: int, pity: int) -> float:
 	var base: = float(WEAPON_GRADES[clampi(g, 1, WEAPON_GRADES.size() - 1)].chance)
+	# [MOD] boost the base BEFORE the shipped pity line; the outer maxf() below then uses the boosted value
+	# as its floor, which is what lets the boost exceed GRADE_CHANCE_MAX (0.75) where the raw table was lower.
+	base = maxf(base, minf(MOD_GRADE_CAP, base * float(MOD_GRADE_MULT[clampi(g, 1, MOD_GRADE_MULT.size()) - 1])))
 	return maxf(base, minf(base + GRADE_PITY * clampi(pity, 0, GRADE_PITY_MAX), GRADE_CHANCE_MAX))
 
 
@@ -9601,6 +9619,27 @@ const ALTARS: = {
 
 
 
+# [MOD] Altar spawn weights, read at the roll site in core/altars.gd spawn() (the only place the
+# pool is picked; force-spawns from karma/net/debug bypass it). Shipped defaults are w=1.0 for every
+# rollable altar except yggdrasil (w=0.3) - 7.3 total, so each of the seven was 13.7% and yggdrasil
+# 4.1%. Rollable pool is the 8 ids WITHOUT "npc"/"karma": baldur/hel (karma) and hypnotist (npc) are
+# not here. New odds: odin/thor/loki/emperium 6.0 = 20.4% each (measured 200 k rolls of the real loop,
+# work/logs/altar_odds/: 20.47 / 20.34 / 20.41 / 20.39), yggdrasil 3.0 = 10.2% (kept at half the
+# others - it is the only rollable altar with an empty "bad", so the dev's own w=0.3 is a scarcity signal,
+# x10 here is already generous), freyja/niflheim/valkyrie 0.8 = 2.7% each. Total weight 29.4; the reward
+# pool (the five altars whose "good" is a real reward) is 91.9% of spawns - stock 58.9%, or 45.2% if you
+# count Emperium as a debuff altar, which is what v11 did and v15 undoes.
+# EMPERIUM moved 0.8 -> 6.0 in v15 - it was mis-grouped with the "bad four" in v11. Its "bad" is a fight
+# (EMPERIUM_GUARDS = 5 elites from the stage/tower tier pool, altars.gd:761-788) and its "good" is the best
+# payout in the table: a 3-roll bonus-2 MVP Treasure Box (altars.gd:796 -> main.gd:13598) plus +1 level per
+# hero (altars.gd:799-803). That box goes through roll_item()'s normal pool, so it is one of the two altars
+# that can mint Sword Wings (SWORD_WINGS_FARM_GUIDE.md §11). The genuinely bad three are the ones whose
+# "bad" side scales with the monster curve and pays nothing: enemy_dmg +20%, enemy_hp +25%, MVP +25% HP early.
+const MOD_ALTAR_W: = {"odin": 6.0, "thor": 6.0, "loki": 6.0, "yggdrasil": 3.0, "freyja": 0.8, "niflheim": 0.8, "valkyrie": 0.8, "emperium": 6.0}
+# [MOD] Baldur vs Hel are a separate spawn (karma.gd, every KARMA_ALTAR_EVERY from KARMA_ALTAR_FROM):
+# shipped 50/50 pick_random(). 0.75 = three Baldur (heal, +10% HP, +5% dmg, Valhalla route) per Hel
+# (-15% max HP, Niflheim route).
+const MOD_KARMA_BALDUR: = 0.75
 const HYPNO_AT: = [150.0, 330.0, 510.0]
 const HYPNO_ENDLESS_EVERY: = 180.0
 const HYPNO_LIFE: = 120.0

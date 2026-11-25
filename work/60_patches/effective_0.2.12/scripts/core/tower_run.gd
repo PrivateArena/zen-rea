@@ -1,6 +1,12 @@
 class_name TowerRun
 extends Node
 
+# [MOD] Endless Tower nerf: floor index used for enemy HP/damage growth is clamped, so the exponential
+# 1.06^floor (HP) / 1.035^floor (damage) stops compounding past MOD_TOWER_FLOOR_CAP while the hero keeps
+# growing at TOWER_FLOOR_DMG. Hel floors reach eff() = 100 + 5*floor, which is what made floor ~200
+# absurd; the clamp flattens that whole tail. Speed growth is deliberately left untouched.
+const MOD_TOWER_FLOOR_CAP: = 90.0
+
 
 
 
@@ -562,9 +568,17 @@ func _start_floor() -> void :
 				_lord_talk()
 		elif GameData.MONSTERS.has(mvp):
 			world._run_event({"type": "boss", "mob": mvp})
-	elif floor >= GameData.TOWER_EVENT_FROM and floor % GameData.TOWER_TIER_FLOORS == GameData.TOWER_EVENT_AT:
+	# [MOD] The shipped event gate is every 10 floors (TOWER_TIER_FLOORS) and pick() never repeats a kind, so
+	# MOD_EVENT_W alone could not bring the Emperium trial under ~24 floors. Also fire the sign on the floor
+	# TowerEvents.emp_due() declares due (MOD_EMP_EVERY floors past the last trial): that puts the trial on a
+	# ~9 floor rhythm, which is below the tier's 10 and therefore impossible from the residue alone. The
+	# shipped residue-5 floors still carry the roll, so the other five kinds keep their own cadence.
+	# Coop is safe: _sync() (:995-1007) is host-only and re-broadcasts state + _sign_kind every 0.25 s, so a
+	# peer's own local emp_due() answer (its _emp_floor can drift, same as its discarded weighted roll did
+	# before) is overwritten by the host's floor state before the floor can start.
+	elif (_events != null and _events.emp_due(floor)) or (floor >= GameData.TOWER_EVENT_FROM and floor % GameData.TOWER_TIER_FLOORS == GameData.TOWER_EVENT_AT):
 
-		_sign_kind = _force_event if _force_event != "" else _events.pick()
+		_sign_kind = _force_event if _force_event != "" else _events.pick_for(floor)
 		_force_event = ""
 		_sign_t = GameData.TOWER_EVENT_SIGN
 		state = "sign"
@@ -963,16 +977,17 @@ func scale_enemy(e: Enemy) -> void :
 	if e.prop != "":
 		return
 	var f: = eff() - 1
+	var fg: = minf(MOD_TOWER_FLOOR_CAP, float(f))
 	var mvp: bool = e.def.get("mvp", false)
 	var r: = _rule()
-	var growth: = pow(GameData.TOWER_MVP_HP_STEP if mvp else GameData.TOWER_HP_STEP, f)
+	var growth: = pow(GameData.TOWER_MVP_HP_STEP if mvp else GameData.TOWER_HP_STEP, fg)
 
 
 
 	var untrim: = 1.0 / GameData.HELL_HP_TRIM if GameData.hell_level(world.danger) >= GameData.HELL_HP_TRIM_FROM else 1.0
 	e.max_hp *= growth * untrim * (1.0 if mvp else float(r.get("hp", 1.0)))
 	e.hp = e.max_hp
-	e.damage *= pow(GameData.TOWER_MVP_DMG_STEP if mvp else GameData.TOWER_DMG_STEP, f) * (1.0 if mvp else float(r.get("dmg", 1.0)))
+	e.damage *= pow(GameData.TOWER_MVP_DMG_STEP if mvp else GameData.TOWER_DMG_STEP, fg) * (1.0 if mvp else float(r.get("dmg", 1.0)))
 	e.speed *= (1.0 + minf(GameData.TOWER_SPEED_MAX, GameData.TOWER_SPEED_STEP * f) + GameData.TOWER_CYCLE_SPEED * cycle_of(floor))\
 	* (1.0 if mvp else float(r.get("speed", 1.0)))
 	if r.has("scale") and not mvp and e.visual is Node3D:
