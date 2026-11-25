@@ -13,32 +13,25 @@
 # Bytecode target  : GDRE token 4.5.0-stable == revision 101, the revision this game's .gdc use.
 # Pack it patches  : the OFFICIAL patch_<ver>.pck held in orig/ (never a previously modded one, else
 #                    mods stack; the updater deletes the pack it replaces, so orig/ is the authority).
-# Version          : taken from user://patches/state.json (override with MOD_VER=x.y.z). On a new
-#                    official patch: decompile the new layer, tag it v<ver>-decompiled, apply
-#                    mod-latest.patch, copy the pristine pack into orig/ - see PATCH_SYSTEM.md §5/§10.
+# Version          : taken from user://patches/state.json (override with MOD_VER=x.y.z) through the same
+#                    layer_env.sh the ingest pipeline uses. state.json also carries bridge.version, so a
+#                    parse that takes the LAST version line is a time bomb, not a shortcut.
 set -uo pipefail
 
 die() { echo "build.sh: $*" >&2; exit 1; }
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 
 W="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd "$W/../.." && pwd)"
-BUILD="$W/build"; OUT="$W/out"; ORIG="$W/orig"; VERIFY="$W/verify"
-RE_BIN="${RE_BIN:-/media/jang/home/PortableApp/re/bin}"
-GDRE="$RE_BIN/gdre_tools"
-BYTECODE="${BYTECODE:-4.5.0-stable}"
-APP="Midgard Survivors"
-PATCHES="${XDG_DATA_HOME:-$HOME/.local/share}/godot/app_userdata/$APP/patches"
-STATE="$PATCHES/state.json"
+. "$W/layer_env.sh"      # ROOT ORIG OUT PATCHES STATE GDRE BYTECODE + layer_pack/layer_ver/layer_manifest
+die() { echo "build.sh: $*" >&2; exit 1; }      # layer_env defines its own; ours must win here
+BUILD="$W/build"; VERIFY="$W/verify"
 
 VER="${MOD_VER:-}"
-if [ -z "$VER" ] && [ -f "$STATE" ]; then
-  VER=$(sed -n 's/."version": *"\([0-9][0-9.]*\)".*/\1/p' "$STATE" | tail -1)
-fi
+[ -n "$VER" ] || VER=$(layer_ver 2>/dev/null)
 case "$VER" in ''|*[!0-9.]*)
   die "cannot determine the current patch version from $STATE - set MOD_VER=x.y.z" ;;
 esac
-PACK="patch_$VER.pck"
+PACK="$(layer_pack "$VER")"
 LIVE="$PATCHES/$PACK"
 SRC="$W/effective_$VER"; SRCREL="${SRC#"$ROOT"/}"
 BASE_TAG="${BASE_TAG:-v$VER-decompiled}"
@@ -166,6 +159,25 @@ printf '%s\n' "$list_in" | grep '^res://' | while IFS= read -r m; do
 done > "$VERIFY/lost.txt" 2>&1
 if [ -s "$VERIFY/lost.txt" ]; then echo "  $(cat "$VERIFY/lost.txt")"; bad=$((bad + 1)); fi
 echo "  all other members carried over intact"
+# --- mount-order audit: an override of a script no mounted pack ships is a DEAD override. It can happen
+# when a layer stops shipping a file (the 0.2.11 bridge dropped nothing, but the 0.2.0-era bridge did).
+echo "== shadow audit (every override must sit under something the game actually mounts)"
+LOWER="$VERIFY/lower.txt"; : > "$LOWER"
+for l in "$LISTINGS/pck-files.txt" $(layer_listings "$VER" 2>/dev/null); do
+  [ -s "$l" ] && grep '^res://' "$l" >> "$LOWER"
+done
+if [ ! -s "$LOWER" ]; then
+  echo "  SKIPPED: no member listing for $VER (run layer_sync.sh) - cannot audit"
+else
+  sort -u -o "$LOWER" "$LOWER"
+  for pair in "${ARGS[@]}"; do
+    pair=${pair#--patch-file=}; res=${pair#*=}      # same split as the member-hash check below
+    grep -qxF -- "$res" "$LOWER" && continue
+    printf '  DEAD    %s  is shipped by NO mounted pack - the game would never load it\n' "$res"
+    bad=$((bad + 1))
+  done
+  [ "$bad" = 0 ] && echo "  every override shadows a member of base/bridge/patch"
+fi
 if [ "$DEEP" = 1 ]; then
   echo "== deep: decompile(compile(src)); source lines missing from the bytecode are advisory"
   echo "   (multi-line expressions are re-wrapped by the decompiler, so inspect, do not trust blindly)"

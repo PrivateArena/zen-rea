@@ -13,7 +13,7 @@
 # "the patch pack" nor "the newest bridge on disk" alone identifies a build: `layer_manifest` is the
 # only correct answer, and it is read from state.json, which is what the game itself reads.
 
-W="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"          # work/60_patches
+W="${LAYER_W:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"   # work/60_patches (LAYER_W: sourced from repo root)
 ROOT="$(cd "$W/../.." && pwd)"                            # repo root
 WORK="$ROOT/work"
 LISTINGS="$WORK/logs"
@@ -137,19 +137,28 @@ layer_manifest() {
   printf 'patch\t%s\t%s\n' "$pfile" "$pver"
 }
 
-# layer_raw_dir KIND VER / layer_src_dir KIND VER — where a layer's extracted .gdc and decompiled .gd go.
-# patch layers keep the historical scripts_full_<ver> name; bridges get scripts_bridge_<ver>, falling back
-# to scripts_full_<ver> so the pre-0.2.12 bridge (0.2.0) still resolves.
+# layer_raw_dir KIND VER [PATCHVER] / layer_src_dir KIND VER [PATCHVER] — where a layer's extracted .gdc
+# and decompiled .gd live. Patch layers keep the historical scripts_full_<ver> name. A bridge gets
+# scripts_bridge_<ver>, and falls back to scripts_full_<ver> only for the pre-0.2.12 layout (the 0.2.0
+# bridge, whose scripts_full_ dir is already on disk). PATCHVER matters for the new layout: if the bridge
+# and the patch pack ever carry the SAME version, scripts_full_<ver> belongs to the patch, never the bridge.
 layer_raw_dir() {
-  if [ "$1" = bridge ] && [ -d "$W/raw_bridge_$2" ]; then echo "$W/raw_bridge_$2"; return; fi
+  if [ "$1" = bridge ]; then
+    [ -d "$W/raw_bridge_$2" ] && { echo "$W/raw_bridge_$2"; return; }
+    [ -n "$3" ] && [ "$2" = "$3" ] && { echo "$W/raw_bridge_$2"; return; }
+    [ -d "$W/raw_$2" ] && { echo "$W/raw_$2"; return; }
+    echo "$W/raw_bridge_$2"; return
+  fi
   echo "$W/raw_$2"
 }
 layer_src_dir() {
-  local d="$W/scripts_full_$2"
   if [ "$1" = bridge ]; then
-    [ -d "$W/scripts_bridge_$2" ] && d="$W/scripts_bridge_$2"
+    [ -d "$W/scripts_bridge_$2" ] && { echo "$W/scripts_bridge_$2"; return; }
+    [ -n "$3" ] && [ "$2" = "$3" ] && { echo "$W/scripts_bridge_$2"; return; }
+    [ -d "$W/scripts_full_$2" ] && { echo "$W/scripts_full_$2"; return; }
+    echo "$W/scripts_bridge_$2"; return
   fi
-  echo "$d"
+  echo "$W/scripts_full_$2"
 }
 
 # layer_listing KIND VER — the member listing file for one pack (what play.sh --layer reads).

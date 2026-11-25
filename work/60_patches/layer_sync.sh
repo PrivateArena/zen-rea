@@ -87,6 +87,10 @@ while IFS=$'\t' read -r KIND FILE LVER; do
 done <<< "$MANIFEST"
 SRC_LIST=${SRC_LIST%$'\n'}
 [ -n "$SRC_LIST" ] || die "no readable plaintext pack for $VER (live: $PATCHES, pristine: $ORIG)"
+# the decompile dirs are keyed by KIND+VER; PATCHVER disambiguates a bridge that shares its version with
+# the patch pack (then scripts_full_<ver> is the PATCH's, and the bridge gets scripts_bridge_<ver>)
+PATVER=$(printf '%s
+' "$MANIFEST" | awk -F'	' '$1=="patch"{print $3; exit}')
 
 if [ -n "$(git -C "$ROOT" tag -l "$TAG")" ] && [ "$FORCE" != 1 ]; then
   if [ "$DRY" = 1 ]; then
@@ -109,8 +113,8 @@ N_ALL=0; N_GDC=0; N_GD=0; N_RAW=0; REVS=""
 
 # ================================================================= 2..5, per layer ==============
 while IFS=$'\t' read -r KIND FILE LVER SRC; do
-  RAW=$(layer_raw_dir "$KIND" "$LVER")
-  FULL=$(layer_src_dir "$KIND" "$LVER")
+  RAW=$(layer_raw_dir "$KIND" "$LVER" "$PATVER")
+  FULL=$(layer_src_dir "$KIND" "$LVER" "$PATVER")
   LOG="$W/decompile_${KIND}_$LVER.log"
   LIST=$(layer_listing "$KIND" "$LVER")
   PACK_NAME="$FILE"
@@ -203,7 +207,7 @@ LAYERS=("$BASE_LAYER")
 # a NEWER bridge supersedes every older one and every patch pack older than it: they are not mounted,
 # so they must not be in the tree. Only state.json knows the truth -> layer_manifest, never a glob.
 while IFS=$'\t' read -r KIND FILE LVER SRC; do
-  d=$(layer_src_dir "$KIND" "$LVER")
+  d=$(layer_src_dir "$KIND" "$LVER" "$PATVER")
   [ -d "$d" ] || { echo "  SKIP $(basename "$d") (no decompile for $FILE)"; continue; }
   n=$(find "$d" -name '*.gd' 2>/dev/null | wc -l)
   [ "$n" = 0 ] && { echo "  SKIP $(basename "$d") (0 scripts)"; continue; }

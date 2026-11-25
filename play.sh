@@ -4,9 +4,10 @@
 #
 # Why this script exists (verified — full findings in work/60_patches/PATCH_SYSTEM.md):
 #   * The retail pack (0.1.273) is only the BASE layer. At startup the game mounts, in this order:
-#         MidgardSurvivors.pck  <-  user://patches/bridge_0.1.273_to_0.2.0.pck
-#                               <-  user://patches/patch_<ver>.pck   (currently patch_0.2.4.pck)
-#     and the LAST mounted pack wins, so the content you play is the newest patch.
+#         MidgardSurvivors.pck  <-  user://patches/bridge_0.1.273_to_<bridgeVer>.pck
+#                               <-  user://patches/patch_<ver>.pck    (state.json names both)
+#     and the LAST mounted pack wins, so the content you play is the newest patch. Since 0.2.11 the
+#     bridge carries the scripts and the patch pack can be a small asset hotfix (PATCH_SYSTEM.md §21).
 #   * Updater._enabled() returns false for ANY user argument after "--" (except --update-url and
 #     --lang). That silently disables the updater AND both patch mounts -> you would be playing
 #     0.1.273 content. So: engine flags go through --godot (safe), --user is loud and opt-in.
@@ -35,22 +36,26 @@ APP="Midgard Survivors"
 PATCHES="${XDG_DATA_HOME:-$HOME/.local/share}/godot/app_userdata/$APP/patches"
 STATE="$PATCHES/state.json"
 
-# Which patch pack is current? The updater rewrites state.json and DELETES the pack it replaces, so
-# never hardcode this: read it from the game's own state, else take the newest patch_*.pck on disk.
-VER=""
-if [ -f "$STATE" ]; then
-  VER=$(sed -n 's/."version": *"\([0-9][0-9.]*\)".*/\1/p' "$STATE" | tail -1)
-fi
-[ -n "$VER" ] || VER=$(ls -1t "$PATCHES"/patch_*.pck 2>/dev/null | head -1 | sed 's/.*patch_\(.*\)\.pck/\1/')
-PACK="patch_${VER:-0.0.0}.pck"
-LIVE="$PATCHES/$PACK"
-MOD_PACK="$WORK/60_patches/out/$PACK"   # output of the mod build step, when it exists
+# One source of truth for the layer model: the same helpers the ingest/build pipeline uses.
+LAYER_W="$ROOT/work/60_patches"
+# shellcheck disable=SC1091
+. "$LAYER_W/layer_env.sh"          # layer_state / layer_ver / layer_manifest / layer_listing / vcmp
+die() { echo "play.sh: $*" >&2; exit 1; }        # layer_env defines its own; ours must win here
 
-# sha256 of the pristine developer packs. NOTE: the updater wiped patches2/ (an unknown directory in
-# user://) on the 0.2.4 update, so the ONLY pristine copies are work/60_patches/orig/*.pck - those are
-# what the verdict below is compared against, per pack. SHA_PATCH is the 0.2.3 fallback only.
+# Which packs is the game going to mount? state.json is authoritative (the updater rewrites it and
+# DELETES the pack it replaces) - never hardcode a version or a bridge name here.
+VER="$(layer_state version)"
+case "$VER" in ''|null) VER=$(ls -1t "$PATCHES"/patch_*.pck 2>/dev/null | head -1 | sed 's/.*patch_\(.*\)\.pck/\1/') ;; esac
+PACK="$(layer_pack "${VER:-0.0.0}")"
+LIVE="$PATCHES/$PACK"
+MOD_PACK="$ROOT/work/60_patches/out/$PACK"   # output of the mod build step, when it exists
+
+# sha256 of the pristine developer packs. Sources, in order of trust:
+#   1. work/logs/layer-hashes-<ver>.txt  — recorded by layer_sync.sh at ingest, works for every pack size
+#   2. work/60_patches/orig/<pack>       — the pristine bytes we kept (packs under KEEP_MAX)
+# The updater wiped patches2/ on the 0.2.4 update and deletes the pack it replaces, so neither user://
+# nor a previously-built pack is ever a reference. SHA_PATCH is the 0.2.3 fallback only.
 SHA_BASE="a8d0b35b1434571d3c2cea23c9a697a6ea032300ba47d1479f7f3b640328a8b6"
-SHA_BRIDGE="b0266960e901362fe6fcc5766fb45655c3f00a44f329a2e8b999da3ec507f028"
 SHA_PATCH="680b5dfd9cdc7290552c7e2b62057002ec0902a4573afb45ff74633e7af31b66"
 
 MODE=launch DIR="$GAME_DIR" ISOLATE=0 VERIFY=0 LAYER="" DRY=0
@@ -66,31 +71,41 @@ while [ $# -gt 0 ]; do
     -n|--dry-run) DRY=1; shift ;;
     --godot)      shift; [ $# -gt 0 ] && { ENGINE_ARGS+=("$1"); shift; } ;;
     --user)       shift; [ $# -gt 0 ] && { USER_ARGS+=("$1"); shift; } ;;
-    -h|--help)    sed -n '3,27p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)    sed -n '4,27p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "play.sh: unknown option '$1' (try --help)" >&2; exit 2 ;;
   esac
 done
 
 hr() { printf '%s\n' "--------------------------------------------------------------------------"; }
 
-# sha256 of the pristine copy we keep outside user:// (orig/), else the recorded 0.2.3 sha
-pristine_sha() {
-  local p="$WORK/60_patches/orig/$1"
-  if [ -f "$p" ]; then sha256sum "$p" | cut -d' ' -f1; else echo "$SHA_PATCH"; fi
+# official_sha PACK — the developer's own sha256 for a pack name, "" if we never recorded it
+official_sha() {
+  local name="$1" h=""
+  h=$(awk -F'\t' -v n="$name" '$4 == n { print $1; exit }' "$LISTINGS"/layer-hashes-*.txt 2>/dev/null)
+  [ -n "$h" ] && { echo "$h"; return; }
+  local p="$LAYER_W/orig/$name"
+  if [ -f "$p" ]; then sha256sum "$p" | cut -d' ' -f1; return; fi
+  echo ""
 }
 
 # --- which pack owns a given res:// member --------------------------------------------------
 do_layer() {
-  local spec tag f hit=0
-  for spec in "BASE:$LISTINGS/pck-files.txt" \
-              "BRIDGE:$LISTINGS/bridge-0.2.0-files.txt" \
-              "PATCH:$LISTINGS/patch-${VER}-files.txt"; do
+  local kind file lv spec tag f hit=0
+  local -a specs=("base:$LISTINGS/pck-files.txt")
+  echo "  mount order (last one wins):"
+  printf '    %-9s %s\n' "base" "MidgardSurvivors.pck  (v$(layer_base_ver))"
+  while IFS=$'\t' read -r kind file lv; do
+    printf '    %-9s %s  (v%s)\n' "$kind" "$file" "$lv"
+    specs+=("$kind:$(layer_listing "$kind" "$lv")")
+  done < <(layer_manifest "${VER:-0}")
+  hr
+  for spec in "${specs[@]}"; do
     tag="${spec%%:*}"; f="${spec#*:}"
     if [ ! -f "$f" ]; then
       echo "  (no member listing for $tag — regenerate: gdre_tools --list-files=<pack> > $f)"
       continue
     fi
-    grep -F -- "$LAYER" "$f" | sed "s|^|  $tag  |" && hit=1
+    grep -F -- "$LAYER" "$f" | sed "s|^|  ${tag^^}  |" | sort -u && hit=1
   done
   [ "$hit" = 1 ] || { echo "  '$LAYER' matches no member of any pack"; return 1; }
   hr; echo "  winner = last layer listed (patch > bridge > base). Edit THAT one, or put your file there."
@@ -105,24 +120,26 @@ do_status() {
   echo "  base pack   ${base_pck##*/}  ${mb} MB"
   echo "USER DIR      ${XDG_DATA_HOME:-$HOME/.local/share}/godot/app_userdata/$APP"
   if [ -f "$STATE" ]; then
-    local v b
-    v=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$STATE" | tail -1)
-    b=$(sed -n 's/.*"base": *"\([^"]*\)".*/\1/p' "$STATE")
+    local kind file lv
     echo "  state.json  $(tr -d '\t\n' < "$STATE")"
-    echo "  ==> the game will run v$v   (base pack alone is v$b)"
+    echo "  ==> the game will run v${VER:-?}  (base pack alone is v$(layer_base_ver)); mount order:"
+    while IFS=$'\t' read -r kind file lv; do
+      printf '        %-7s %-34s (v%s)  %s
+' "$kind" "$file" "$lv" \
+        "$([ -f "$PATCHES/$file" ] && echo on disk || echo MISSING)"
+    done < <(layer_manifest "$VER")
   else
-    echo "  state.json  ABSENT -> patches not installed, the game runs stock 0.1.273"
+    echo "  state.json  ABSENT -> patches not installed, the game runs stock $(layer_base_ver)"
   fi
   local verdict
   for f in "$PATCHES"/*.pck; do
     [ -e "$f" ] || { echo "  patch packs NONE"; continue; }
     mb=$(( $(stat -c %s "$f") / 1048576 ))
     h=$(sha256sum "$f" | cut -d' ' -f1)
-    case "${f##*/}" in
-      bridge_*) want="$SHA_BRIDGE" ;;
-      *)        want="$(pristine_sha "${f##*/}")" ;;
-    esac
-    if [ "$h" = "$want" ]; then verdict="official"; else verdict="MODIFIED_our_edit"; fi
+    want="$(official_sha "${f##*/}")"
+    if [ -z "$want" ]; then
+      verdict="no-official-record"          # never ingested: cannot tell official from ours
+    elif [ "$h" = "$want" ]; then verdict="official"; else verdict="MODIFIED_our_edit"; fi
     printf '  pack        %-34s %5d MB  %-18s %s...\n' "${f##*/}" "$mb" "$verdict" "${h:0:16}"
   done
   [ -f "$DIR/coop_preview.txt" ] && { hr; echo "  NOTE: coop_preview.txt next to the binary -> updater + patches DISABLED."; }

@@ -114,7 +114,7 @@ for t in $(ls -1d "$W"/effective_* 2>/dev/null | sort -V); do
   [ "$(cd "$t" && pwd)" = "$(cd "$TREE" && pwd)" ] && continue
   [ -n "$(grep -rl 'MOD_' "$t/scripts" 2>/dev/null)" ] && REF="$t"
 done
-n_new=0; n_bad=0
+n_new=0; n_bad=0; n_ok=0
 while IFS=$'\t' read -r f txt; do
   [ -f "$TREE/$f" ] || continue
   ln=$(grep -Fn -- "$txt" "$TREE/$f" | tail -1 | cut -d: -f1)
@@ -122,7 +122,7 @@ while IFS=$'\t' read -r f txt; do
   of=""; [ -n "$REF" ] && [ -f "$REF/$f" ] && of=$(grep -Fn -- "$txt" "$REF/$f" | tail -1 | cut -d: -f1)
   if [ -n "$of" ]; then
     ofn=$(enclosing "$of" "$REF/$f")
-    if [ "$ofn" = "$fn" ]; then printf '  ok     %-24s %s()  %s\n' "$f" "$fn" "$(echo "$txt" | cut -c1-58)"; continue; fi
+    if [ "$ofn" = "$fn" ]; then printf '  ok     %-24s %s()  %s\n' "$f" "$fn" "$(echo "$txt" | cut -c1-58)"; n_ok=$((n_ok+1)); continue; fi
     printf '  MOVED  %-24s %s()  (was %s() in %s)  %s\n' "$f" "${fn:-<none>}" "${ofn:-<none>}" "$(basename "$REF")" "$(echo "$txt" | cut -c1-40)"; n_bad=$((n_bad+1))
   else
     printf '  new?   %-24s %s()  %s\n' "$f" "${fn:-<none>}" "$(echo "$txt" | cut -c1-58)"
@@ -130,7 +130,8 @@ while IFS=$'\t' read -r f txt; do
   n_new=$((n_new+1))
 done < "$SITES"; rm -f "$SITES"
 [ -n "$REF" ] || echo "  (no earlier layer with the mod applied to compare against - review the list above)"
-[ $((n_new + n_bad)) = 0 ] && echo "  no indented MOD_ statements found?! check the patch"
+[ $((n_new + n_bad + n_ok)) = 0 ] && echo "  no indented MOD_ statements found?! check the patch"
+[ $n_ok = 0 ] || echo "  $n_ok knob site(s) verified in the same function as in $(basename "${REF:-?}")"
 
 # --- audit 3: lint pre-flight -----------------------------------------------------------------
 layer_ck "audit 3/3 lint-allow.txt coverage (the build.sh gate)"

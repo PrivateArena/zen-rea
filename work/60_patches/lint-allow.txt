@@ -23,6 +23,9 @@ const MOD_TAG: = "mod-v4 mechanics_cap=0.15 clock_cap=3.0 choice_w=[52,27,15,6]"
 	elif t < GameData.POTENTIAL_TIERS.size() and randf() < float(GameData.POTENTIAL_UP[t - 1]):
 		var lt: = t if i == 0 or randf() < GameData.POTENTIAL_SAME else maxi(1, t - 1)
 			line["p"] = randf() < GameData.POTENTIAL_PERFECT
+# SUPERSEDED 0.2.4: the dev rewrote this roll to the _hits()/fused form further down. The row is kept so
+# an older effective_ tree still lints clean; layer_diff 5/5 reporting it as never seen in either layer is
+# therefore expected, not a coverage gap.
 	if not e.summoned and not training and randf() < star_crumb_chance(e) * drop:
 const MOD_TAG: = "mod-v7 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 pot_up=[30,18] pot_same=0.70 lock_cost=2"
 	return float(table[clampi(int(it.refine), 0, table.size() - 1)])
