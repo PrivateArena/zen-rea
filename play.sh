@@ -44,8 +44,7 @@ die() { echo "play.sh: $*" >&2; exit 1; }        # layer_env defines its own; ou
 
 # Which packs is the game going to mount? state.json is authoritative (the updater rewrites it and
 # DELETES the pack it replaces) - never hardcode a version or a bridge name here.
-VER="$(layer_state version)"
-case "$VER" in ''|null) VER=$(ls -1t "$PATCHES"/patch_*.pck 2>/dev/null | head -1 | sed 's/.*patch_\(.*\)\.pck/\1/') ;; esac
+VER="$(layer_ver 2>/dev/null)"     # layer_ver: rejects the base version, falls back to the newest pack
 PACK="$(layer_pack "${VER:-0.0.0}")"
 LIVE="$PATCHES/$PACK"
 MOD_PACK="$ROOT/work/60_patches/out/$PACK"   # output of the mod build step, when it exists
@@ -71,7 +70,7 @@ while [ $# -gt 0 ]; do
     -n|--dry-run) DRY=1; shift ;;
     --godot)      shift; [ $# -gt 0 ] && { ENGINE_ARGS+=("$1"); shift; } ;;
     --user)       shift; [ $# -gt 0 ] && { USER_ARGS+=("$1"); shift; } ;;
-    -h|--help)    sed -n '4,27p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)    layer_usage; exit 0 ;;
     *) echo "play.sh: unknown option '$1' (try --help)" >&2; exit 2 ;;
   esac
 done
@@ -113,7 +112,7 @@ do_layer() {
 
 # --- what is installed ----------------------------------------------------------------------
 do_status() {
-  local f h want mb base_pck="$DIR/MidgardSurvivors.pck"
+  local f h want mb hum sz base_pck="$DIR/MidgardSurvivors.pck"
   [ -f "$DIR/MidgardSurvivorsRT.pck" ] && base_pck="$DIR/MidgardSurvivorsRT.pck"
   mb=$(( $(stat -c %s "$base_pck" 2>/dev/null || echo 0) / 1048576 ))
   echo "GAME DIR      $DIR"
@@ -134,13 +133,15 @@ do_status() {
   local verdict
   for f in "$PATCHES"/*.pck; do
     [ -e "$f" ] || { echo "  patch packs NONE"; continue; }
-    mb=$(( $(stat -c %s "$f") / 1048576 ))
+    sz=$(stat -c %s "$f")
+    # humanised: the patch pack is now a 174 KB asset hotfix, "0 MB" would be meaningless
+    if [ "$sz" -ge 1048576 ]; then hum="$((sz / 1048576)) MB"; else hum="$((sz / 1024)) KB"; fi
     h=$(sha256sum "$f" | cut -d' ' -f1)
     want="$(official_sha "${f##*/}")"
     if [ -z "$want" ]; then
       verdict="no-official-record"          # never ingested: cannot tell official from ours
     elif [ "$h" = "$want" ]; then verdict="official"; else verdict="MODIFIED_our_edit"; fi
-    printf '  pack        %-34s %5d MB  %-18s %s...\n' "${f##*/}" "$mb" "$verdict" "${h:0:16}"
+    printf '  pack        %-34s %8s  %-18s %s...\n' "${f##*/}" "$hum" "$verdict" "${h:0:16}"
   done
   [ -f "$DIR/coop_preview.txt" ] && { hr; echo "  NOTE: coop_preview.txt next to the binary -> updater + patches DISABLED."; }
   if [ "$VERIFY" = 1 ]; then
@@ -206,7 +207,9 @@ do_launch() {
   if [ "$ISOLATE" = 1 ]; then
     local sandbox="$WORK/70_play_userdata/godot/app_userdata/$APP"
     if [ "$DRY" != 1 ]; then
-      mkdir -p "$sandbox/patches"
+      # rebuild the mount set from scratch: the updater deletes the pack it replaces, so a symlink left
+      # over from an earlier isolated run would shadow the current layer with a version that no longer exists
+      rm -rf "$sandbox/patches"; mkdir -p "$sandbox/patches"
       for f in "$PATCHES"/*.pck; do [ -e "$f" ] && ln -sfn "$f" "$sandbox/patches/${f##*/}"; done
       if [ -f "$MOD_PACK" ]; then
         ln -sfn "$MOD_PACK" "$sandbox/patches/$PACK"

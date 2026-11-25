@@ -764,6 +764,12 @@ density — our `MOD_ALTAR_W` makes that more valuable, not more dangerous.
 
 ## 20. The update pipeline, scripted (2026-11-21)
 
+> **Superseded in part by §22 (2026-11-25).** The table below still describes the four tools, but the layer
+> model in `layer_env.sh` changed: it is a `state.json`-read **manifest** (`layer_manifest`,
+> `layer_state`, `layer_listings`, `layer_src_dir`), not "the newest patch pack". Steps, refusals and the
+> exit-3 rule are unchanged; `layer_sync.sh` now ingests every pack the manifest names and dies on a partial
+> mount set. Read §22.3 for what each tool does now.
+
 Everything §10/§14/§19 did by hand is now four scripts + one shared env file, all in this directory and
 all git-tracked. They only touch `work/` and read `user://`/the game dir — the same rules as `play.sh`.
 
@@ -825,3 +831,143 @@ Final table `{odin,thor,loki} 6.0, yggdrasil 3.0, {freyja,niflheim,valkyrie,empe
 (stock 45.2 %). At `ALTAR_EVERY [60,90]` a 30-min run offers ~24 altars, so ~3 of them now carry a downside
 (v11/v13a: ~1). Measured with the §18 harness, captures `work/logs/altar_odds/odds_0.2.7_v13.txt` (7.0/0.2 step)
 and `odds_0.2.7_v13b.txt` (final). Built pack **`66349701ea251c9e…`**, not yet installed.
+
+---
+
+## 22. Update 0.2.7 -> 0.2.12: the layer model changed (2026-11-25) — pipeline rework + mod v16
+
+The biggest official update since we started modding, and the first one that broke a tool assumption. Two
+things changed at once: **where the scripts live**, and **what `state.json` says**.
+
+### 22.1 What the update actually is
+
+| Pack | Bytes | sha256 | Members | `.gdc` |
+| --- | --- | --- | --- | --- |
+| `bridge_0.1.273_to_0.2.11.pck` | 228 779 464 | `20821a7255f19078…` | 9 966 (6 359 assets, 3 407 `.godot`, 191 scripts+sidecars) | **142** |
+| `patch_0.2.12.pck` | 174 100 | `4317ffe53015378b…` | **1** (`res://.godot/imported/npc_kafra_goth.png-78dc3c….ctex`) | **0** |
+
+`state.json` gained a nested key:
+
+```json
+{ "base": "0.1.273", "bridge": { "file": "bridge_0.1.273_to_0.2.11.pck", "version": "0.2.11" },
+  "file": "patch_0.2.12.pck", "version": "0.2.12" }
+```
+
+So the layer that used to be "bridge 0.2.0 (8 452 members) + cumulative patch 0.2.7 (271 members)" became
+**"one fat bridge that carries the whole game (including every script) + a patch pack that is a
+last-mile asset hotfix"**. The 0.2.0 bridge and the 0.2.3/0.2.4/0.2.7 patch packs are gone from disk: the
+updater deleted what it replaced, and a *promoted* bridge (22.2) makes the old chain moot.
+
+Consequence for the tooling, which is why this is a section and not a footnote: **"ingest the newest
+patch pack" is no longer a definition of the current build**. `layer_sync.sh` could not ingest 0.2.12 at
+all (0 `.gdc` -> the bytecode-rev check dies on a missing file) and, worse, its tree assembly globbed
+`scripts_full_*`, which now mixes one bridge and three obsolete patch layers. Everything in 22.3 exists to
+make the mount set a fact read from the game, not an inference from directory names.
+
+### 22.2 `updater.gd` (0.2.12) — the parts that decide our mod's lifetime
+
+* **Mount** (`_ready():111-136`): `state.base` must equal the installed build or `_clear_patches()` wipes
+  the whole `patches/` dir (`_clear_patches:522` = `DirAccess.remove` over every file). Then the bridge is
+  mounted; **if mounting the bridge fails, `_clear_patches()` again** — a corrupt bridge takes our pack with
+  it. Then the patch pack; a failure there is only a `push_error`.
+* **No local integrity check** (unchanged): the packs on disk are never hashed, so a modded pack mounts
+  silently. Downloads are encrypted (`GDEC` + `PATCH_KEY`) and hash-checked (`:378`).
+* **Deletion matrix** (`_download` finish, `:441-466`) — this is what kills our pack:
+  | Update shape | state.json afterwards | files deleted |
+  | --- | --- | --- |
+  | new patch pack | `{base, bridge?, version, file}` | the old `file` (= our modded pack) |
+  | new bridge (`as_bridge`) | `{base, bridge:{new}, version: new}` | the old `file` **and** the old `bridge` |
+  | `base` mismatch / bridge mount failure | `{}` | **everything** in `patches/` |
+  Either way: **every official update removes our pack**, so the mod has to be re-applied and re-installed
+  every time (§20 + 22.5).
+* **Bridge promotion** `_adopt_bridge():337` — if the client has a patch pack and *no* bridge, and the
+  manifest's `base` catches up to the installed patch version, that patch file is rewritten in state as the
+  *bridge*. Harmless for us while a bridge exists (0.2.11+ always leaves one), but a reason not to keep a
+  modded pack around as the only artefact of a build.
+* **`legacy` table** (`:312`) — a bridge download is only offered when `manifest.legacy[base].version ==
+  manifest.base`; otherwise the game shows "new build required" (a reinstall, not a patch). If that ever
+  happens, our `orig/` + tagged decompile are the only copy of the layer we modded.
+
+### 22.3 The pipeline rework (commits `1bce631`, `82e1a02`, + the review fixes in this commit)
+
+`layer_env.sh` is now the single authority on the layer model; every other tool asks it instead of guessing:
+
+| Helper | Gives | Replaces |
+| --- | --- | --- |
+| `layer_state KEY` | jq, with an awk walker fallback (handles the nested `bridge` object and compact JSON) | `sed … \| tail -1` on `version`, which only *accidentally* picked the top-level key |
+| `layer_manifest [VER]` | `kind⇥file⇥version` rows in **mount order**, from `state.json` for the live version and from the snapshot written at ingest for older ones | "the newest `patch_*.pck`", `scripts_full_*` globs, hardcoded bridge names |
+| `layer_src_dir` / `layer_raw_dir` `KIND VER [PATCHVER]` | decompile dirs; a bridge gets `scripts_bridge_<ver>` unless it is the legacy 0.2.0 layer, and `PATCHVER` keeps a same-version bridge+patch pair from colliding on `scripts_full_<ver>` | one name for both kinds |
+| `layer_listing` / `layer_listings` | `work/logs/<kind>-<ver>-files.txt` per pack | `patch-<ver>-files.txt` as "the" listing |
+| `layer_ver` / `layer_prev` / `layer_base_ver` / `vcmp` | version arithmetic incl. `0.2.12 > 0.2.7` | lexicographic assumptions |
+
+Behaviour changes that matter at the next update:
+
+* `layer_sync.sh` ingests **every pack in the manifest**, in order, and dies if any of them is missing
+  (a partial mount set can no longer be tagged as a pristine baseline — the tag and the tracked manifest
+  snapshot would then permanently record a lie).
+* `orig/` keeps the **patch pack always** (it is `build.sh`'s base) and anything ≤ `KEEP_MAX` (64 MB);
+  the 228 MB bridge is recorded by sha256+size in `work/logs/layer-hashes-<ver>.txt` instead of by copy —
+  its durable artefact is the tagged decompile, and the volume has 6 GB free. The recorded hash always comes
+  from `orig/` when we have it: after `--install` the *live* pack is our build, and hashing that would make
+  `play.sh --status` certify a modded pack as official.
+* `work/logs/layer-manifest-<ver>.tsv` + `layer-hashes-<ver>.txt` are **tracked in git**: the updater deletes
+  the packs they describe, and the bridge is too big to keep.
+* `build.sh` adds a **shadow audit**: every `.gdc` we ship must exist in a mounted lower layer, or it is a
+  DEAD override the game will never load. It fails closed (no listings -> no build) and rebuilds a missing
+  listing from the pack on disk.
+* `play.sh` sources `layer_env.sh` (`LAYER_W` override) — `--status` prints the real mount order and a
+  per-pack official/MODIFIED verdict; `--layer` walks every mounted listing; `--isolate` rebuilds its
+  sandbox mount set so a deleted pack cannot leave a dangling link. `--help` is now the header block
+  (`layer_usage`), because the old `sed -n '2,Np'` ranges were off by one in four of five tools.
+
+### 22.4 The 0.2.12 migration as executed (mod **v16**, pack `55ab9e01a28f29c0…`, not installed)
+
+```sh
+. /media/jang/home/PortableApp/re/activate.sh
+cd work/60_patches
+./layer_sync.sh --jobs 4            # bridge 142/142 decompiled, 0 failures; patch pack: 0 scripts, skipped
+./layer_diff.sh --from 0.2.7 --to 0.2.12
+./mod_apply.sh --ver 0.2.12         # patch -p4 --merge -> 1 conflict
+#   resolve game_data.gd by hand, delete the .gd.orig files
+./mod_apply.sh --ver 0.2.12 --check && ./build.sh --deep
+```
+
+* `effective_0.2.12` = `25_scripts` (131) ← `scripts_full_0.2.11` (142) = **180 `.gd`**, tag
+  `v0.2.12-decompiled`. 5 scripts new since 0.2.7 (`build_card`, `kafra_walk`, `rebel`, `thief_arts`,
+  `job_board`), 0 gone; 65 scripts changed (`game_data` 1 381, `main` 1 564, `player` 681 diff lines).
+  Members visible to the game: 8 630 -> 9 965.
+* **One conflict**: `game_data.gd` hunk 1 (the gacha odds). 0.2.11 turned `"dupe_coins": 1` into a
+  per-rarity refund dict `{"common":1,"rare":2,"epic":3,"legendary":5,"unique":5}` + `gacha_refund()`, so the
+  hunk's context line no longer exists. Resolution kept **the developer's dict and `gacha_refund()`** and
+  moved only the `odds` line — our odds are still the single source both `roll()` and the "Probabilidades"
+  list read.
+* `player.gd` hunk 2 reported *merged* (overlapping context inside `take_damage`): the mechanics cap and its
+  probe are intact; reviewed line by line.
+* Proof the port is a port: **all 51 knob sites** are in the same function as in the modded 0.2.7 tree
+  (`mod_apply` audit 2), and the multiset of code lines the mod **adds** is identical (276 lines, 0 dropped,
+  0 extra). `MOD_TAG` v15 -> `mod-v16 on 0.2.12` (both copies, `player.gd:29`, `enemy.gd:252`).
+* Verification: `--deep` round-trip clean (the two flagged lines are the `0.40`/`0.4` float print and a
+  trailing comment — known decompiler re-flow), shadow audit clean, 12 members, 11 `.gdc` hashes match.
+* Side finding from the v15 play-test that happened just before the update (`user://mod_probe_events.txt`):
+  **`gap=8.9 floors`, emperium 39/69 events (56.5 %)** — the `tower_run.gd:579` `emp_due()` hook does land and
+  the §19/§21 target of ~9 floors is what the game really produced. The v15 mechanics probe on 0.2.7 logged
+  688 hits / 102 capped / worst 0.50 × max_hp, so the cap engages and normal hits stay untouched.
+
+### 22.5 Playbook for the next update (replaces the §10/§14/§19 prose where they differ)
+
+```sh
+cd work/60_patches && ./update.sh --deep        # ingest -> report -> re-apply -> build; never installs
+```
+
+Then read the report. The shape of the update decides what to expect:
+
+| Update shape (state.json) | What `update.sh` does | What you must check |
+| --- | --- | --- |
+| new patch pack, same bridge | ingests bridge (already decompiled, reused) + new patch | if the new patch pack ships 0 scripts, the mod is unchanged in content — the knobs still sit in bridge scripts, so the merge is against the *bridge* layer |
+| new bridge (+ patch) | ingests both; the old bridge/patch are deleted by the updater and are **not** in the tree | the 38 scripts only the base ships (addons, `flow_field`, `hero_input`, `skins`, `weather`, …) come back from `25_scripts`; `layer_diff` 2/5 "gone" must stay 0 |
+| bridge newer than the top-level `version` | prints a NOTE and names the tree after `version` | that is fine: the tree content is the bridge, the tag follows what the game presents |
+| `state.json` without a `bridge` key | `layer_bridge_le` reconstructs it from disk/listings | a wrong bridge name means the ingest dies, not silently mis-assembles |
+
+Whatever the shape: `orig/` must end up holding the pristine **patch** pack (the build base) and
+`work/logs/layer-manifest-<ver>.tsv` + `layer-hashes-<ver>.txt` must be committed — those two files plus the
+tag are all that survives of a build once the updater has deleted the packs.

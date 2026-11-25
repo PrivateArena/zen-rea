@@ -23,7 +23,7 @@ while [ $# -gt 0 ]; do
     --skip-sync) SKIP_SYNC=1; shift ;;
     --install) BARGS+=(--install); shift ;;
     --deep) BARGS+=(--deep); shift ;;
-    -h|--help) sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) layer_usage; exit 0 ;;
     *) die "unknown option: $1 (--help)" ;;
   esac
 done

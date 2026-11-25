@@ -36,7 +36,8 @@ die() { echo "layer: $*" >&2; exit 1; }
 sha256() { sha256sum "$1" | cut -d' ' -f1; }
 
 # layer_state KEY — one value out of state.json, KEY may be dotted (version, file, base, bridge.file,
-# bridge.version). jq when present, a line-oriented awk walker otherwise (state.json is flat, 2 levels).
+# bridge.version). jq when present, an awk walker otherwise (state.json is flat, 2 levels deep); the walker
+# splits the file into one entry per line first, so a compact one-line state.json parses too.
 # NOTE: the naive `sed ... | tail -1` this replaces used to pick the LAST "version" line, which happens to
 # be the top-level one today — the file also contains bridge.version. Never rely on key order again.
 layer_state() {
@@ -45,20 +46,20 @@ layer_state() {
   if command -v jq >/dev/null 2>&1; then
     v=$(jq -r "getpath(\"$key\" | split(\".\")) // \"\" | tostring" "$STATE" 2>/dev/null)
   else
-    v=$(awk -v key="$key" '
+    v=$(sed -e 's/{/{\n/g' -e 's/}/\n}\n/g' -e 's/,/,\n/g' "$STATE" 2>/dev/null | awk -v key="$key" '
       { line = $0; sub(/,[ \t]*$/, "", line)
         if (line ~ /\{[ \t]*$/) {                       # "name": {
           if (match(line, /"[^"]+"[ \t]*:[ \t]*\{/)) {
             n = substr(line, RSTART, RLENGTH); gsub(/["{ :]/, "", n); path[++depth] = n }
           next }
         if (line ~ /^[ \t]*\}/) { if (depth > 0) depth--; next }
-        if (match(line, /"[^"]+"[ \t]*:[ 	]*"[^"]*"/)) {
+        if (match(line, /"[^"]*"[ \t]*:[ \t]*"[^"]*"/)) {
           kv = substr(line, RSTART, RLENGTH)
-          k = kv; sub(/:.*/, "", k); gsub(/[" \t]/, "", k)
-          val = kv; sub(/^[^"]*"[^"]*"/, "", val); gsub(/[" \t:]/, "", val)
+          k = kv; sub(/:.*/, "", k); gsub(/[" \t]/, "", k)              # keys never contain spaces
+          val = kv; sub(/^[^:]*:[ \t]*"/, "", val); sub(/"$/, "", val)   # peel delimiters, keep content
           p = ""; for (i = 1; i <= depth; i++) p = p path[i] "."
           p = p k
-          if (p == key) { print val; exit } } }' "$STATE" 2>/dev/null)
+          if (p == key) { print val; exit } } }')
   fi
   echo "$v"
 }
@@ -104,11 +105,12 @@ layer_bridge_le() {
     if [ -z "$bv" ] || vcmp "$v" "$bv"; then bv="$v"; bf="$f"; fi
   done
   if [ -z "$bf" ]; then
-    for c in $(ls -1 "$LISTINGS"/bridge-*-files.txt 2>/dev/null | sort -V); do
+    while IFS= read -r c; do
+      [ -n "$c" ] || continue
       f="${c##*/}"; v="${f#bridge-}"; v="${v%-files.txt}"
       vcmp "$v" "$ver" && continue
       bv="$v"; bf="bridge_$(layer_base_ver)_to_$v.pck"   # name reconstructed: the bytes are gone anyway
-    done
+    done < <(ls -1 "$LISTINGS"/bridge-*-files.txt 2>/dev/null | sort -V)
   fi
   [ -n "$bf" ] && printf '%s\t%s\n' "$bf" "$bv"
   return 0
@@ -119,7 +121,11 @@ layer_bridge_le() {
 # retail .pck the game installs. The LIVE version's manifest comes from state.json (authoritative);
 # an older version's comes from the snapshot layer_sync.sh wrote when it was ingested.
 layer_manifest() {
-  local ver="${1:-$(layer_ver)}" brfile="" brver="" pfile="" pver="" mf=""
+  local ver="${1:-$(layer_ver 2>/dev/null)}" brfile="" brver="" pfile="" pver="" mf=""
+  if [ -z "$ver" ] || [ "$ver" = "null" ]; then
+    echo "layer_manifest: cannot resolve a version (no state.json version, no patch_*.pck in $PATCHES)" >&2
+    return 1
+  fi
   if [ "$ver" != "$(layer_ver 2>/dev/null)" ]; then
     mf=$(layer_manifest_file "$ver")
     [ -s "$mf" ] && { cat "$mf"; return; }
@@ -134,6 +140,10 @@ layer_manifest() {
     IFS=$'\t' read -r brfile brver < <(layer_bridge_le "$ver" | head -1)
   fi
   [ -n "$brfile" ] && printf 'bridge\t%s\t%s\n' "$brfile" "$brver"
+  if [ -z "$pver" ]; then
+    echo "layer_manifest: no patch version for $ver (state.json has none?)" >&2
+    return 1
+  fi
   printf 'patch\t%s\t%s\n' "$pfile" "$pver"
 }
 
@@ -145,7 +155,7 @@ layer_manifest() {
 layer_raw_dir() {
   if [ "$1" = bridge ]; then
     [ -d "$W/raw_bridge_$2" ] && { echo "$W/raw_bridge_$2"; return; }
-    [ -n "$3" ] && [ "$2" = "$3" ] && { echo "$W/raw_bridge_$2"; return; }
+    [ -n "${3:-}" ] && [ "$2" = "$3" ] && { echo "$W/raw_bridge_$2"; return; }
     [ -d "$W/raw_$2" ] && { echo "$W/raw_$2"; return; }
     echo "$W/raw_bridge_$2"; return
   fi
@@ -154,7 +164,7 @@ layer_raw_dir() {
 layer_src_dir() {
   if [ "$1" = bridge ]; then
     [ -d "$W/scripts_bridge_$2" ] && { echo "$W/scripts_bridge_$2"; return; }
-    [ -n "$3" ] && [ "$2" = "$3" ] && { echo "$W/scripts_bridge_$2"; return; }
+    [ -n "${3:-}" ] && [ "$2" = "$3" ] && { echo "$W/scripts_bridge_$2"; return; }
     [ -d "$W/scripts_full_$2" ] && { echo "$W/scripts_full_$2"; return; }
     echo "$W/scripts_bridge_$2"; return
   fi
@@ -171,7 +181,7 @@ layer_listings() {
   while IFS=$'\t' read -r kind file v; do
     f=$(layer_listing "$kind" "$v")
     [ -s "$f" ] && echo "$f"
-  done < <(layer_manifest "$1")
+  done < <(layer_manifest "$1" 2>/dev/null)
   return 0
 }
 
@@ -210,6 +220,13 @@ layer_magic() { head -c 4 "$1" 2>/dev/null | tr -d '\0'; }
 
 # layer_ck MSG — step banner.
 layer_ck() { printf '\n== %s\n' "$*"; }
+
+# layer_usage [SCRIPT] — print a script's own header comment block as its --help, stopping at the first
+# line of code. Replaces the `sed -n '2,13p'`-style line ranges, which silently drift every time a header
+# gains a line (they were off by one in four of the five tools).
+layer_usage() {
+  awk 'NR > 1 { if (/^#/) { sub(/^#[ \t]*/, ""); print; next } exit }' "${1:-${BASH_SOURCE[1]}}"
+}
 
 # layer_need — refuse to run half-way when the tooling is missing.
 layer_need() {

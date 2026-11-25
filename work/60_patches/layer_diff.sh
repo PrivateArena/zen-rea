@@ -23,7 +23,7 @@ while [ $# -gt 0 ]; do
     --to) TO="$2"; shift 2 ;;
     --files) FILES=1; shift ;;
     --show) SHOW="$2"; shift 2 ;;
-    -h|--help) sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) layer_usage; exit 0 ;;
     *) die "unknown option: $1 (--help)" ;;
   esac
 done

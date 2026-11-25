@@ -33,7 +33,7 @@ while [ $# -gt 0 ]; do
     --install) BUILD=1; BARGS+=(--install); shift ;;
     --restore) RESTORE=1; shift ;;
     --check) CHECK=1; shift ;;
-    -h|--help) sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) layer_usage; exit 0 ;;
     *) die "unknown option: $1 (--help)" ;;
   esac
 done

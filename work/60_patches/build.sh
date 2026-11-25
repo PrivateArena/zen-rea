@@ -54,6 +54,7 @@ for a in "$@"; do
     --diff|--restore) ACTION="$a" ;;
     --install) INSTALL=1 ;;
     --deep) DEEP=1 ;;
+    -h|--help) layer_usage; exit 0 ;;
     *) die "unknown option: $a" ;;
   esac
 done
@@ -161,22 +162,37 @@ if [ -s "$VERIFY/lost.txt" ]; then echo "  $(cat "$VERIFY/lost.txt")"; bad=$((ba
 echo "  all other members carried over intact"
 # --- mount-order audit: an override of a script no mounted pack ships is a DEAD override. It can happen
 # when a layer stops shipping a file (the 0.2.11 bridge dropped nothing, but the 0.2.0-era bridge did).
+# Fail CLOSED: no listings means no audit, so a build must never ship on an unaudited mount set.
 echo "== shadow audit (every override must sit under something the game actually mounts)"
-LOWER="$VERIFY/lower.txt"; : > "$LOWER"
-for l in "$LISTINGS/pck-files.txt" $(layer_listings "$VER" 2>/dev/null); do
+deal=0; LOWER="$VERIFY/lower.txt"; : > "$LOWER"
+while IFS=$'\t' read -r lkind lfile lver; do
+  l=$(layer_listing "$lkind" "$lver")
+  if [ ! -s "$l" ]; then
+    pk="$PATCHES/$lfile"; [ -f "$pk" ] || pk="$ORIG/$lfile"
+    if [ -f "$pk" ]; then
+      echo "  (rebuilding the missing listing work/logs/$(basename "$l"))"
+      "$GDRE" --list-files="$pk" 2>/dev/null | grep '^res://' | sort > "$l"
+    fi
+  fi
   [ -s "$l" ] && grep '^res://' "$l" >> "$LOWER"
-done
+done < <(layer_manifest "$VER" 2>/dev/null)
+[ -s "$LISTINGS/pck-files.txt" ] && grep '^res://' "$LISTINGS/pck-files.txt" >> "$LOWER" \
+  || echo "  WARNING: no base-pack listing ($LISTINGS/pck-files.txt) - base-only overrides go unchecked"
 if [ ! -s "$LOWER" ]; then
-  echo "  SKIPPED: no member listing for $VER (run layer_sync.sh) - cannot audit"
+  echo "  CANNOT AUDIT: no member listing for any mounted pack of $VER (run layer_sync.sh) - refusing"
+  die "shadow audit impossible - do NOT build blind"
+fi
+sort -u -o "$LOWER" "$LOWER"
+for pair in "${ARGS[@]}"; do
+  pair=${pair#--patch-file=}; res=${pair#*=}      # same split as the member-hash check below
+  grep -qxF -- "$res" "$LOWER" && continue
+  printf '  DEAD    %-46s shipped by NO mounted pack - the game would never load it\n' "$res"
+  deal=$((deal + 1))
+done
+if [ "$deal" = 0 ]; then
+  echo "  every override shadows a member of base/bridge/patch"
 else
-  sort -u -o "$LOWER" "$LOWER"
-  for pair in "${ARGS[@]}"; do
-    pair=${pair#--patch-file=}; res=${pair#*=}      # same split as the member-hash check below
-    grep -qxF -- "$res" "$LOWER" && continue
-    printf '  DEAD    %s  is shipped by NO mounted pack - the game would never load it\n' "$res"
-    bad=$((bad + 1))
-  done
-  [ "$bad" = 0 ] && echo "  every override shadows a member of base/bridge/patch"
+  bad=$((bad + deal))
 fi
 if [ "$DEEP" = 1 ]; then
   echo "== deep: decompile(compile(src)); source lines missing from the bytecode are advisory"

@@ -20,7 +20,7 @@ Architecture + as-built deltas: `ARCHITECTURE_PLAN_portable-rea-re-env.md` (§11
 | Engine | `Godot Engine v4.7.2.stable.official`; project version `0.1.273`; `.gdc` bytecode revision **101** (= GDRE token `4.5.0-stable` / commit `ebc36a7`) |
 | Scripts | 131 `.gdc` (+134 `.remap`) → **131 `.gd` recovered, 0 failures** |
 | `MidgardSurvivors.x86_64` | stock Godot 4.7.2 export template, stripped, no custom sections, no PCK/integrity/anti-cheat checks, aborts on `--main-pack`/`--path` (`disable_path_overrides=yes`) |
-| Live patch layer (`user://patches/`) | `state.json`: base `0.1.273`, bridge `0.2.0`, **`patch_0.2.7.pck`** (official sha `0810d151…`, 271 members). Packs here are unsigned-on-disk and cumulative; each update **deletes** the pack it replaces. Downloads travel **encrypted** (`GDEC` + `PATCH_KEY`, `updater.gd _decrypt()`) and are decrypted on disk — §19.2 |
+| Live patch layer (`user://patches/`) | `state.json`: base `0.1.273`, **bridge `0.2.11`** (`bridge_0.1.273_to_0.2.11.pck`, 228 MB, 9 966 members, **142 `.gdc`** — the scripts live HERE now), patch `0.2.12` (`patch_0.2.12.pck`, 174 KB, **1 member, 0 scripts**). Packs are unsigned-on-disk; each update **deletes** the pack it replaces, a bridge update deletes the old bridge too, and a failed bridge mount wipes the dir. Downloads travel **encrypted** (`GDEC` + `PATCH_KEY`, `updater.gd _decrypt()`) and are decrypted on disk — §22.1/§22.2 |
 | Native libs | `libeosg.linux.template_release.x86_64.so` (one `T`: `eosg_library_init`), `libEOSSDK-Linux-Shipping.so` — Epic EOS GDExtension, **optional by guard** `net_sync.gd:145-153` |
 
 **Verdict so far: no native RE needed.** All balance is client-side const tables; servers do
@@ -34,7 +34,7 @@ telemetry/leaderboard/cloud-save/update-manifest only. Consequence: `Rizin/Cutte
 | `work/10_evidence/` | 2 REA inventory bundles (45 MB each) |
 | `work/25_scripts/` | scripts-only recovery — the fast place to grep/read GDScript |
 | `work/30_recovered/` | full recovered project, 2.0 GB, 26,746 files (the only copy since `40_mod` was deleted 2026-11-19) |
-| `work/60_patches/` | **the live patch layer + all mod work.** `PATCH_SYSTEM.md` = findings (§7 balance map, §10 update behaviour, §14 + §19 = migrations, §20 = the scripted pipeline). `SWORD_WINGS_FARM_GUIDE.md` = the tier-`slots` item bug (`ITEM_TIERS[slots]` multiplies every base mod) + the Endless Tower run-clock/chest farming recipe; §11 = the scripted Naght Sieger wings award, the "Mítico" grade and the Emperium altar as a third mint source, §12 = mod v15. `effective_0.2.7/` = the 175 `.gd` tree the game really runs (git-tracked source; `effective_0.2.3/`, `effective_0.2.4/` kept as history). `update.sh` = one command after an official patch (`layer_sync.sh` ingest+tag → `layer_diff.sh` report → `mod_apply.sh` re-apply+audit), `build.sh` = compile→pack→verify→install (version from `state.json`), `lint-allow.txt` = intentionally-replaced shipped lines, `mod-latest.patch` / `mod-0.2.7.patch`, `orig/` = **the only pristine pack backups** (`patch_0.2.3/0.2.4/0.2.5/0.2.7.pck`) |
+| `work/60_patches/` | **the live patch layer + all mod work.** `PATCH_SYSTEM.md` = findings (§7 balance map, §10 update behaviour, §14 + §19 = migrations, §20 = the scripted pipeline, **§22 = the 0.2.11 bridge split + the manifest rework + mod v16**). `SWORD_WINGS_FARM_GUIDE.md` = the tier-`slots` item bug (`ITEM_TIERS[slots]` multiplies every base mod) + the Endless Tower run-clock/chest farming recipe; §11 = the scripted Naght Sieger wings award, the "Mítico" grade and the Emperium altar as a third mint source, §12 = mod v15. `effective_0.2.12/` = **the 180 `.gd` tree the game really runs** (git-tracked source; `effective_0.2.7/`, `effective_0.2.3/`, `effective_0.2.4/` kept as history). `update.sh` = one command after an official patch (`layer_sync.sh` ingest+tag → `layer_diff.sh` report → `mod_apply.sh` re-apply+audit), `build.sh` = compile→pack→verify→install (version **and pack name** from `state.json` via `layer_env.sh`), `lint-allow.txt` = intentionally-replaced shipped lines, `mod-latest.patch` / `mod-0.2.12.patch`, `orig/` = **the only pristine pack backups** (`patch_0.2.3/0.2.4/0.2.5/0.2.7/0.2.12.pck`; the 228 MB bridge is *not* copied — its sha256+size go to the tracked `work/logs/layer-hashes-<ver>.txt`, and `work/logs/layer-manifest-<ver>.tsv` records the mount set) |
 | `work/50_roundtrip/` | write-path sandbox; `REPORT.md` = the verified patch recipe; `launch_test/` = ready-to-run fixture |
 | `work/logs/` | `pck-files.txt`, `verify.baseline.json`, per-run logs |
 | `PROJECT_OVERVIEW.md` (env) · `work/README.md` (dir map) | boot reading |
@@ -45,16 +45,19 @@ Key numbers: env 830 MB on nvme; work 2.8 GB on `/media/jang/free` (6.2 GB free 
 
 ## Next step (in order)
 
-0. **On any official update**: `cd work/60_patches && ./update.sh --deep` (§20) — it ingests, reports what
-   moved, re-applies the mod and builds; it **stops with exit 3** on a conflict instead of shipping one.
-   Install only after a play-test: `./update.sh --skip-sync --install`.
+0. **On any official update**: `cd work/60_patches && ./update.sh --deep` (§20 + **§22.5 playbook**) — it ingests
+   every pack `state.json` mounts, reports what moved, re-applies the mod and builds; it **stops with exit 3**
+   on a conflict instead of shipping one, and **dies** if a mounted pack is missing. Install only after a
+   play-test: `./update.sh --skip-sync --install`.
 
-1. **Play-test mod v15 on 0.2.7** *(human — `./play.sh`, no args after `--`)*: the two v15 knobs first —
-   tower Emperium trial spacing (`user://mod_probe_events.txt` now prints `gap=<x> floors`; expect ~9, worst 9;
-   ~24 = the `tower_run.gd:576` hook did not land) and the altar mix (Emperium ≈1 spawn in 5, its guard fight →
-   MVP Treasure Box + 1 level). Then the older carry-overs: Star Crumb rate with the fused `_hits()` roll +
-   Golden Poring source, legendary frequency (≈1 in 10 offers), `×1.5` XP (~+56 levels at the 40-min mark).
-   `./play.sh --probe` (probe files in `user://`) and retune the `MOD_*` constants → `./build.sh --deep --install`.
+1. **Play-test mod v16 on 0.2.12** *(human — `./play.sh`, no args after `--`)*: v16 is a pure port of v15 (51
+   knob sites identical, added lines identical) and v15's tower numbers are already confirmed (`gap=8.9 floors`,
+   emperium 56.5 % of events), so test the 0.2.12-specific things: the altar mix (Emperium ≈1 spawn in 5, its
+   guard fight → MVP Treasure Box + 1 level), Star Crumb rate with the fused `_hits()` roll + Golden Poring
+   source (the devs rewrote that roll in 0.2.4), legendary frequency (≈1 in 10 offers), `×1.5` XP against the
+   new curve, and the new content the mod deliberately does **not** touch (`rebel`/`thief_arts`/`job_board`/
+   `kafra_walk`/`build_card`, world bosses, combos). `./play.sh --probe` (probe files in `user://`), retune the
+   `MOD_*` constants → `./build.sh --deep --install`.
 2. **Runtime acceptance test of the base-pack write path** *(still pending, needs a human)*:
    `work/50_roundtrip/launch_test/MidgardSurvivorsRT/` → `./MidgardSurvivorsRT.x86_64 -- --disable-updater`.
    Look for ` [RT-TEST]` in a bottom-centre loading tip (`menus.gd:3614`, ~1 tip in 16).
@@ -90,21 +93,42 @@ is why the round-trip marker test needs it, and why mod testing must NOT use it.
 Balance work happens in `work/60_patches/`: edit `effective_<ver>/`, build with GDRE into `out/`, ship
 into `user://patches/`. `40_mod` / `30_recovered` are read-only study trees. Version control is **one
 repo at the project root**, text-only (GitHub-ready); tags `v<ver>-decompiled` = pristine live builds,
-therefore `git diff v0.2.7-decompiled` **is** the mod. Never `git add -f` a `.pck`/`.gdc`. Never run
+therefore `git diff v0.2.12-decompiled` **is** the mod. Never `git add -f` a `.pck`/`.gdc`. Never run
 `rea setup`, `rea update`, `pi mcp add`, or bare `npm install` (skill §6). Recapture
 `work/logs/verify.baseline.json` only after a deliberate change. Add a dated entry below whenever a
 step completes.
 
 ```sh
-git log --oneline | head -1                # 26e3727 unless you committed something
+git log --oneline | head -1                # 4269cb6 unless you committed something
 git status --porcelain | wc -l             # expect 0 between steps
-git diff --stat v0.2.7-decompiled -- work/60_patches/effective_0.2.7   # = the mod
-cd work/60_patches && ./update.sh --dry-run      # what the next official patch would do (§20)
+git diff --stat v0.2.12-decompiled -- work/60_patches/effective_0.2.12   # = the mod
+cd work/60_patches && ./update.sh --dry-run      # what the next official patch would do (§22.5)
 ```
 
 ## Log
 
-**2026-11-23 (latest)** — **mod v15: Emperium in both places (built `e9e9d9c422cd1297…`, NOT installed pending play-test)** —
+**2026-11-25 (latest)** — **Official update 0.2.7 -> 0.2.12 handled: the layer model changed, the pipeline was
+rebuilt around it, mod re-applied as v16 (built `55ab9e01a28f29c0…`, NOT installed pending play-test)** —
+the update is **bridge `0.2.11` (228 MB, 9 966 members, 142 `.gdc` = every script) + patch `0.2.12` (174 KB,
+1 `.ctex` member, 0 scripts)**, and `state.json` grew a nested `bridge` key. Full write-up **§22**.
+Pipeline (`1bce631`, `82e1a02` + review fixes): `layer_env.sh` now derives a **layer manifest** from
+state.json (`layer_state` via jq with an awk fallback, `layer_manifest`, `layer_listings`, kind-aware
+`layer_src_dir`/`layer_raw_dir`, `vcmp`, fixed `layer_ver`/`layer_prev`); `layer_sync.sh` ingests **every**
+mounted pack in mount order, dies on a partial mount set, keeps the patch pack in `orig/` always (it is
+`build.sh`'s base) but records the bridge by sha256 only, and writes the tracked provenance pair
+`work/logs/layer-manifest-<ver>.tsv` + `layer-hashes-<ver>.txt`; `build.sh` gained a **shadow audit** (every
+shipped `.gdc` must shadow a member of base/bridge/patch — fail closed); `play.sh` reads the same manifest
+(no more hardcoded bridge name/sha/listing). Ingest: 142/142 decompiled, 0 failures -> `effective_0.2.12`
+(180 `.gd`), tag `v0.2.12-decompiled`. Dev churn 0.2.7 -> 0.2.12: 65 scripts changed (`game_data` 1 381,
+`main` 1 564, `player` 681 lines), 5 new (`rebel`/`thief_arts`/`job_board`/`kafra_walk`/`build_card`), 0 gone,
+every const the mod reads unchanged. `mod-latest.patch` merged with **1 conflict** — 0.2.11 turned
+`GACHA.dupe_coins` into a per-rarity refund dict (+ `gacha_refund()`), so the gacha-odds hunk lost its context
+line: kept the dev's dict, moved only the odds. v16 = pure port: **51/51 knob sites in the same function, the
+set of added code lines identical to v15 (276)**, `MOD_TAG` -> `mod-v16 on 0.2.12`. Also **v15 play-test
+data is in**: `gap=8.9 floors`, emperium 39/69 events (56.5 %) and 688 mechanics hits / 102 capped / worst
+0.50 x max_hp — the v15 cadence hook and the cap both behave exactly as designed.
+
+**2026-11-23** — **mod v15: Emperium in both places (built `e9e9d9c422cd1297…`, installed and play-tested — see the 2026-11-25 entry)** —
 three player findings verified in code and written up as guide §11: (a) the floor-100 Naght Sieger **does** hand out Sword Wings —
 not from the 5-roll `treasure` chest (that one still cannot) but from the scripted `_award_tower_wings` 1.6 s later
 (`main.gd:12147-12151`, `:12243-12265`), `slots 0` = **+30 %**, once per class forever (`_wings_due` `:12234`); (b) wings are shown as
@@ -239,5 +263,5 @@ is how a `tower_traps.gdc` override reaches the top layer.
 ```sh
 git log --oneline | head -1                    # unchanged unless the child committed (they must not)
 git status --porcelain | wc -l                 # expect 0
-git diff --stat v0.2.7-decompiled -- work/60_patches/effective_0.2.7 | tail -1   # the mod, +/- only
+git diff --stat v0.2.12-decompiled -- work/60_patches/effective_0.2.12 | tail -1   # the mod, +/- only
 ```

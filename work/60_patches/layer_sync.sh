@@ -26,45 +26,58 @@ set -uo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/layer_env.sh"
 layer_need
 
-VER="" PACK="" JOBS=3 DRY=0 NOCOMMIT=0 FORCE=0
+VER="" VER_OPT="" PACK="" JOBS=3 DRY=0 NOCOMMIT=0 FORCE=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --ver) VER="$2"; shift 2 ;;
+    --ver) VER_OPT="$2"; VER="$VER_OPT"; shift 2 ;;
     --pack) PACK="$2"; shift 2 ;;
     --jobs) JOBS="$2"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
     --no-commit) NOCOMMIT=1; shift ;;
     --force) FORCE=1; shift ;;
-    -h|--help) sed -n '2,25p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) layer_usage; exit 0 ;;
     *) die "unknown option: $1 (--help)" ;;
   esac
 done
 
-[ -n "$VER" ] || VER=$(layer_ver)
+# --- the layer set to ingest ------------------------------------------------------------------
+# --pack keeps the old single-pack behaviour, but kind AND version come from the FILE NAME: identifying a
+# pack by the live version would label a 0.2.9 bridge as v0.2.12, name its decompile dirs, its listing and
+# its git tag after the wrong build, and write that triple into the tracked manifest snapshot.
+TAB=$(printf '\t')
+if [ -n "$PACK" ]; then
+  [ -f "$PACK" ] || die "no such pack: $PACK"
+  PNAME="${PACK##*/}"
+  case "$PNAME" in
+    bridge_*) KIND="bridge"; PVER="${PNAME##*_to_}" ;;
+    patch_*)  KIND="patch";  PVER="${PNAME#patch_}" ;;
+    *) die "--pack: cannot read a version out of $PNAME (want bridge_<base>_to_<ver>.pck or patch_<ver>.pck)" ;;
+  esac
+  PVER="${PVER%.pck}"
+  case "$PVER" in ''|*[!0-9.]*) die "--pack: bad version '$PVER' parsed from $PNAME" ;; esac
+  [ -n "$VER_OPT" ] || VER="$PVER"
+  MANIFEST="${KIND}${TAB}${PNAME}${TAB}${PVER}"
+else
+  [ -n "$VER" ] || VER=$(layer_ver)
+  MANIFEST=$(layer_manifest "$VER") || die "no layer manifest for $VER"
+fi
+[ -n "$MANIFEST" ] || die "empty layer manifest for $VER - state.json gives no bridge/patch and none was found on disk"
 TREE="$W/effective_$VER"
 TREE_REL=$(layer_tagpath "$VER")
 TAG="v$VER-decompiled"
 PREV=$(layer_prev "$VER")
 HASHLOG="$LISTINGS/layer-hashes-$VER.txt"
-
-# --- the layer set to ingest ------------------------------------------------------------------
-# --pack keeps the old single-pack behaviour (kind from the file name); otherwise it is the manifest.
-if [ -n "$PACK" ]; then
-  [ -f "$PACK" ] || die "no such pack: $PACK"
-  case "${PACK##*/}" in
-    bridge_*) KIND="bridge"; BVER="${PACK##*_to_}"; BVER="${BVER%.pck}"; VER="${VER:-$BVER}" ;;
-    *)        KIND="patch" ;;
-  esac
-  MANIFEST="$KIND	${PACK##*/}	$VER"
-else
-  MANIFEST=$(layer_manifest "$VER")
-fi
-[ -n "$MANIFEST" ] || die "empty layer manifest for $VER - state.json gives no bridge/patch and none was found on disk"
+BRVER=$(printf '%s\n' "$MANIFEST" | awk -F'\t' '$1=="bridge"{print $3; exit}')
 
 echo "layer_sync.sh: version $VER  (state.json says $(layer_ver))"
 echo "$MANIFEST" | while IFS=$'\t' read -r k f v; do echo "  layer  $k  $f  (v$v)"; done
 echo "  into     $TREE  ->  tag $TAG"
 echo "  baseline prev: ${PREV:-none}"
+if [ -n "$BRVER" ] && vcmp "$BRVER" "$VER"; then
+  echo "  NOTE: the bridge (v$BRVER) is NEWER than the version this tree is named after ($VER): the dev"
+  echo "        shipped a bridge with no matching patch pack, so state.json still presents $VER. The tree"
+  echo "        content IS the newer bridge - that is what the game mounts."
+fi
 
 # resolve each manifest entry to a readable pack (live user://patches first, then orig/)
 SRC_LIST=""
@@ -73,7 +86,7 @@ while IFS=$'\t' read -r KIND FILE LVER; do
   SRC="$PATCHES/$FILE"
   [ -f "$SRC" ] || SRC="$ORIG/$FILE"
   if [ ! -f "$SRC" ]; then
-    echo "  MISSING: no pack file for $KIND $FILE (cannot decompile it; the tree will be incomplete)" >&2
+    echo "  MISSING: no pack file for $KIND $FILE" >&2
     MISSING=$((MISSING + 1)); continue
   fi
   case "$(layer_magic "$SRC")" in
@@ -87,6 +100,13 @@ while IFS=$'\t' read -r KIND FILE LVER; do
 done <<< "$MANIFEST"
 SRC_LIST=${SRC_LIST%$'\n'}
 [ -n "$SRC_LIST" ] || die "no readable plaintext pack for $VER (live: $PATCHES, pristine: $ORIG)"
+if [ "$MISSING" != 0 ]; then
+  die "$MISSING mounted pack(s) of $(printf '%s\n' "$MANIFEST" | wc -l) are not on disk.
+  Assembling a tree from a PARTIAL mount set would tag a baseline that is not what the game runs, and the
+  manifest snapshot would record the truncated mount set as provenance. Get the pack: launch the game once
+  so the updater mounts it, then copy it out of user://patches/ - or point --pack at a pristine copy.
+  PATCH_SYSTEM.md §14/§19.2."
+fi
 # the decompile dirs are keyed by KIND+VER; PATCHVER disambiguates a bridge that shares its version with
 # the patch pack (then scripts_full_<ver> is the PATCH's, and the bridge gets scripts_bridge_<ver>)
 PATVER=$(printf '%s
@@ -121,26 +141,41 @@ while IFS=$'\t' read -r KIND FILE LVER SRC; do
   layer_ck "layers $KIND $FILE (v$LVER)"
 
   # --- 2. pristine copy -------------------------------------------------------------------------
+  # The hash we record as "the developer's bytes" must come from a copy that CANNOT be ours: after
+  # ./build.sh --install the live user:// pack IS our build, and hashing it would make play.sh certify a
+  # modded pack as official.
   BASE="$ORIG/$PACK_NAME"
   SZ=$(stat -c %s "$SRC" 2>/dev/null || echo 0)
   KEPT=0
   if [ -f "$BASE" ]; then
-    if [ "$FORCE" = 1 ] && ! cmp -s "$SRC" "$BASE"; then
+    if ! cmp -s "$SRC" "$BASE"; then
+      if [ "$SRC" = "$PATCHES/$PACK_NAME" ]; then
+        die "the LIVE $PACK_NAME differs from orig/$PACK_NAME - our mod is installed there.
+  Restore the official pack (./build.sh --restore) or ingest from a fresh download, then rerun."
+      fi
       die "orig/$PACK_NAME differs from $SRC.
   orig/ must hold the developers' own bytes - if a build of ours ever landed there, restore the official
   pack (see PATCH_SYSTEM.md §14) before ingesting, otherwise a mod would be built on top of a mod."
     fi
     KEPT=1
     echo "  orig/$PACK_NAME already there ($(sha256 "$BASE" | cut -c1-16)...)"
-  elif [ "$SZ" -le "$KEEP_MAX" ]; then
+  elif [ "$KIND" != bridge ] || [ "$SZ" -le "$KEEP_MAX" ]; then
+    # the PATCH pack is always kept: build.sh refuses any other base. Only the bridge may exceed KEEP_MAX
+    # (228 MB of assets on a volume with 6 GB free, and its durable artifact is the tagged decompile).
     mkdir -p "$ORIG"
-    cp -p "$SRC" "$BASE" || die "copy failed"
+    cp -p "$SRC" "$BASE" || die "copy failed (disk full? free: $(df -h "$ORIG" | awk 'NR==2{print $4}'))"
     KEPT=1
     echo "  copied -> orig/$PACK_NAME"
   else
-    echo "  SKIPPED orig/ copy: $SZ B > KEEP_MAX ($KEEP_MAX) — recorded by sha256 only (work/logs/$(basename "$HASHLOG"))"
+    echo "  SKIPPED orig/ copy: bridge is $SZ B > KEEP_MAX ($KEEP_MAX) — recorded by sha256 only (work/logs/$(basename "$HASHLOG"))"
   fi
-  SHA=$(sha256 "$SRC")
+  if [ "$KEPT" = 1 ]; then
+    SHA=$(sha256 "$BASE")
+  else
+    SHA=$(sha256 "$SRC")
+    echo "  WARNING: provenance is the live user:// pack (unverified: re-ingesting after --install would"
+    echo "           record OUR bytes here); play.sh cannot certify this pack as official."
+  fi
   printf '%s\t%s\t%s\t%s\n' "$SHA" "$SZ" "$KIND" "$PACK_NAME" >> "$HASHLOG"
   echo "  magic $(layer_magic "$SRC")  sha ${SHA:0:16}...  $SZ B"
 
