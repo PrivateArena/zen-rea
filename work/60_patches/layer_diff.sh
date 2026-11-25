@@ -52,22 +52,22 @@ fi
 echo "layer_diff.sh: v$FROM-decompiled  ->  v$TO-decompiled   (both pristine, straight off the tags)"
 
 # --- 1. pack members --------------------------------------------------------------------------
-layer_ck "1/5 pack members"
-LF="$LISTINGS/patch-$FROM-files.txt"; LT="$LISTINGS/patch-$TO-files.txt"
+layer_ck "1/5 pack members (every pack the game mounts for that version)"
 # normalise: older listings were produced before the pipeline existed (header lines, unsorted)
 mf="$A/members-$FROM"; mt="$B/members-$TO"
-for pair in "$LF:$mf" "$LT:$mt"; do
-  src="${pair%%:*}"; dst="${pair##*:}"
-  [ -s "$src" ] && grep '^res://' "$src" | sort -u > "$dst" || : > "$dst"
+for pair in "$(layer_listings "$FROM" | tr '\n' ' '):$mf" "$(layer_listings "$TO" | tr '\n' ' '):$mt"; do
+  srcs="${pair%:*}"; dst="${pair##*:}"; : > "$dst"
+  for src in $srcs; do [ -s "$src" ] && grep '^res://' "$src" | sort -u >> "$dst"; done
+  sort -u -o "$dst" "$dst"
 done
 if [ -s "$mf" ] && [ -s "$mt" ]; then
   printf '  %-8s %5s members  %3s scripts\n' "$FROM" "$(wc -l < "$mf")" "$(grep -c '\.gdc$' "$mf")"
   printf '  %-8s %5s members  %3s scripts\n' "$TO"   "$(wc -l < "$mt")" "$(grep -c '\.gdc$' "$mt")"
   a=$(comm -13 "$mf" "$mt" | wc -l); d=$(comm -23 "$mf" "$mt" | wc -l)
-  echo "  +$a -$d members vs $FROM"
-  [ "$d" = 0 ] || { echo "  removed (the layer is NOT a superset - check the §4 layer order):"; comm -23 "$mf" "$mt" | sed 's/^/    /' | head -20; }
+  echo "  +$a -$d members vs $FROM (a bridge swap legitimately removes: the new bridge replaces the old one)"
+  [ "$d" = 0 ] || { echo "  removed (verify against the mount order, §21):"; comm -23 "$mf" "$mt" | sed 's/^/    /' | head -20; }
 else
-  echo "  (no listings yet - layer_sync.sh writes work/logs/patch-<ver>-files.txt)"
+  echo "  (no listings yet - layer_sync.sh writes work/logs/<kind>-<ver>-files.txt)"
 fi
 
 # --- 2. script tree ---------------------------------------------------------------------------
