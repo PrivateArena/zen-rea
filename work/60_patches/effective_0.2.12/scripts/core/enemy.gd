@@ -249,7 +249,7 @@ func _init() -> void :
 const MOD_TIME_SCALE_CAP: = 3.0
 # [MOD] one-shot proof that this (patch-layer) script is the one the running process loaded.
 # Enemy.setup() fires on every spawn in every mode, so the probe lands within seconds of a run start.
-const MOD_TAG: = "mod-v16 on 0.2.12 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16]"
+const MOD_TAG: = "mod-v17 on 0.2.12 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16] mvp_card=2.4"
 static var mod_probe_done: = false
 static var mod_probe_spawns: = 0
 static var mod_clock_capped: = 0

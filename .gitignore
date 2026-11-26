@@ -61,8 +61,8 @@ gdre_export.log
 !/work/60_patches/effective_0.2.7/
 !/work/60_patches/effective_0.2.12/
 
-# The odds/cadence probes under work/logs/ are hand-written tools (they regenerate the numbers quoted in
-# SWORD_WINGS_FARM_GUIDE.md / PATCH_SYSTEM.md), so they are tracked; their extracted const files
+# The odds/cadence/card probes under work/logs/ are hand-written tools (they regenerate the numbers quoted
+# in SWORD_WINGS_FARM_GUIDE.md / PATCH_SYSTEM.md), so they are tracked; their extracted const files
 # (altars_data.gd, consts.gd) and their .txt output stay evidence, i.e. untracked.
 # The layer manifest + pack hashes ARE tracked: they are the identity of a build (the updater deletes the
 # packs they describe, and the bridge is too big to keep), so the tree's provenance must outlive the packs.
@@ -74,6 +74,9 @@ gdre_export.log
 /work/logs/altar_odds/*
 !/work/logs/emp_cadence/
 /work/logs/emp_cadence/*
+!/work/logs/mvp_cards/
+/work/logs/mvp_cards/*
 !/work/logs/*/sim.gd
 !/work/logs/*/mk_probe.py
 !/work/logs/*/project.godot
+!/work/logs/*/README.md

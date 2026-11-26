@@ -1,5 +1,5 @@
 diff --git a/work/60_patches/effective_0.2.12/scripts/autoload/game_data.gd b/work/60_patches/effective_0.2.12/scripts/autoload/game_data.gd
-index 99431c4..0db18e8 100644
+index 99431c4..aa48d82 100644
 --- a/work/60_patches/effective_0.2.12/scripts/autoload/game_data.gd
 +++ b/work/60_patches/effective_0.2.12/scripts/autoload/game_data.gd
 @@ -1628,9 +1628,17 @@ const COSMETIC_RARITY: = {
@@ -73,6 +73,20 @@ index 99431c4..0db18e8 100644
  const HYPNO_AT: = [150.0, 330.0, 510.0]
  const HYPNO_ENDLESS_EVERY: = 180.0
  const HYPNO_LIFE: = 120.0
+@@ -10506,6 +10545,13 @@ const MVP_SUMMON_CARD_PITY: = 25
+ const MVP_FIGHT_CARD_CHANCE: = 0.3
+ const MVP_CARD_CHANCE: = 0.285
+ 
++# [MOD] MOD_MVP_CARD_MULT: multiplier on the drop chance of MVP cards ONLY. The gate at every roll site
++# is GameData.is_mvp_card(card) - the card id, not the monster kind - so mob/elite/boss/raid-fight cards
++# keep their shipped odds (CARD_DROP_CHANCE, ELITE_CARD_CHANCE, BOSS_CARD_CHANCE, MVP_FIGHT_CARD_CHANCE
++# are untouched). Sites: World._kill (boss MVP, plus every MVP card that survives the hell pool swap)
++# and world.hell_late.shadow_down (hell shadow MVPs). 2.4 => 0.285 * 2.4 = 0.684 per MVP kill.
++const MOD_MVP_CARD_MULT: = 2.4
++
+ const CARD_LUK_BONUS: = 0.02
+ 
+ const ELITE_CARD_CHANCE: = 0.076
 diff --git a/work/60_patches/effective_0.2.12/scripts/core/altars.gd b/work/60_patches/effective_0.2.12/scripts/core/altars.gd
 index 8012a26..99a0c91 100644
 --- a/work/60_patches/effective_0.2.12/scripts/core/altars.gd
@@ -92,7 +106,7 @@ index 8012a26..99a0c91 100644
  			pick = id
  			break
 diff --git a/work/60_patches/effective_0.2.12/scripts/core/enemy.gd b/work/60_patches/effective_0.2.12/scripts/core/enemy.gd
-index 50ac4d7..f892bb2 100644
+index 50ac4d7..98463e1 100644
 --- a/work/60_patches/effective_0.2.12/scripts/core/enemy.gd
 +++ b/work/60_patches/effective_0.2.12/scripts/core/enemy.gd
 @@ -244,6 +244,15 @@ func _init() -> void :
@@ -104,7 +118,7 @@ index 50ac4d7..f892bb2 100644
 +const MOD_TIME_SCALE_CAP: = 3.0
 +# [MOD] one-shot proof that this (patch-layer) script is the one the running process loaded.
 +# Enemy.setup() fires on every spawn in every mode, so the probe lands within seconds of a run start.
-+const MOD_TAG: = "mod-v16 on 0.2.12 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16]"
++const MOD_TAG: = "mod-v17 on 0.2.12 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16] mvp_card=2.4"
 +static var mod_probe_done: = false
 +static var mod_probe_spawns: = 0
 +static var mod_clock_capped: = 0
@@ -169,6 +183,21 @@ index 513fbbe..8a38aad 100644
  
  
  
+diff --git a/work/60_patches/effective_0.2.12/scripts/core/hell_late.gd b/work/60_patches/effective_0.2.12/scripts/core/hell_late.gd
+index 49745be..cc47ce1 100644
+--- a/work/60_patches/effective_0.2.12/scripts/core/hell_late.gd
++++ b/work/60_patches/effective_0.2.12/scripts/core/hell_late.gd
+@@ -336,6 +336,10 @@ func shadow_down(e: Enemy) -> void :
+ 	var card: = str(e.def.get("card", ""))
+ 	var p: Player = world.player
+ 	var drop: = 1.0 + (float(p.effects.get("drop_find", 0.0)) if p != null and is_instance_valid(p) else 0.0)
++	# [MOD] MOD_MVP_CARD_MULT: this shadow's own card is an MVP card by construction (shadows are stage
++	# MVPs), but keep the same is_mvp_card() gate as World._kill. `drop` is used only by the roll below.
++	if GameData.is_mvp_card(card):
++		drop *= GameData.MOD_MVP_CARD_MULT
+ 	if GameData.CARDS.has(card) and randf() < GameData.MVP_CARD_CHANCE * GameData.HELL_SHADOW_CARD * drop\
+ 	* (GameData.PRIDE_CARD if world.pride_on() else 1.0):
+ 		world._drop_item(e.position + Vector3(0.6, 0, 0), "card", card)
 diff --git a/work/60_patches/effective_0.2.12/scripts/core/karma.gd b/work/60_patches/effective_0.2.12/scripts/core/karma.gd
 index 49b4cfa..14f203f 100644
 --- a/work/60_patches/effective_0.2.12/scripts/core/karma.gd
@@ -183,7 +212,7 @@ index 49b4cfa..14f203f 100644
  
  
 diff --git a/work/60_patches/effective_0.2.12/scripts/core/main.gd b/work/60_patches/effective_0.2.12/scripts/core/main.gd
-index ca67adc..a2ac049 100644
+index ca67adc..29efe1b 100644
 --- a/work/60_patches/effective_0.2.12/scripts/core/main.gd
 +++ b/work/60_patches/effective_0.2.12/scripts/core/main.gd
 @@ -268,6 +268,17 @@ func oath_mats() -> float:
@@ -204,7 +233,30 @@ index ca67adc..a2ac049 100644
  func star_crumb_chance(e: Enemy) -> float:
  	if e.def.get("mvp", false):
  		return GameData.STAR_CRUMB_MVP
-@@ -12775,7 +12786,7 @@ func _kill(e: Enemy) -> void :
+@@ -4255,6 +4266,22 @@ func _take_card(card_id: String, at: Vector3) -> void :
+ 	run_cards.append({"id": card_id, "new": is_new})
+ 
+ 
++	# [MOD] measured MVP-card income -> user://mod_probe_cards.txt, rewritten on every pickup. run_cards is
++	# the per-run pickup list, so this counts what the player actually collected, which is the number
++	# MOD_MVP_CARD_MULT is tuned against (~7 MVP cards per run at Hell 15 with mult = 1).
++	var mod_mvp: = 0
++	for mod_c in run_cards:
++		if GameData.is_mvp_card(str(mod_c.get("id", ""))):
++			mod_mvp += 1
++	var mod_f: = FileAccess.open("user://mod_probe_cards.txt", FileAccess.WRITE)
++	if mod_f != null:
++		mod_f.store_line("mod-v17 mvp_card_mult=%.2f  chance per MVP kill=%.3f (shipped %.3f)" % [GameData.MOD_MVP_CARD_MULT, GameData.MVP_CARD_CHANCE * GameData.MOD_MVP_CARD_MULT, GameData.MVP_CARD_CHANCE])
++		mod_f.store_line("run: hell=%d  danger=%d  time=%d s  mvps_killed=%d  level=%d" % [GameData.hell_level(danger), danger, int(time), run_mvps, player.level])
++		mod_f.store_line("cards this run: mvp=%d  other=%d  total=%d" % [mod_mvp, run_cards.size() - mod_mvp, run_cards.size()])
++		mod_f.store_line("last: %s  mvp=%s  new=%s" % [card_id, str(GameData.is_mvp_card(card_id)), str(is_new)])
++		mod_f.close()
++
++
+ 
+ 	if is_new and not menus.auto_pick:
+ 		_card_window(card_id, true, false)
+@@ -12775,7 +12802,7 @@ func _kill(e: Enemy) -> void :
  		titles.mvp_feats(self)
  
  
@@ -213,7 +265,7 @@ index ca67adc..a2ac049 100644
  	if crumbs > 0:
  		for i in crumbs:
  			gain_material("star_crumb")
-@@ -12795,7 +12806,7 @@ func _kill(e: Enemy) -> void :
+@@ -12795,7 +12822,7 @@ func _kill(e: Enemy) -> void :
  
  
  		_drop_ore(e.position, _mat_count(GameData.GOLD_PORING_ORES, mats))
@@ -222,8 +274,22 @@ index ca67adc..a2ac049 100644
  			gain_material("star_crumb")
  			number(e.position + Vector3(0, 2.6, 0), tr("¡Star Crumb!"), GameData.POTENTIAL_TIERS[2].color, true)
  		if not training and randf() < GameData.GOLD_PORING_COIN * drop:
+@@ -12860,6 +12887,13 @@ func _kill(e: Enemy) -> void :
+ 		card = "" if pool.is_empty() else str(pool.pick_random())
+ 
+ 
++	# [MOD] MOD_MVP_CARD_MULT: MVP cards only. Gated on the FINAL card id - if the hell pool swap above
++	# took this kill's card away it is a stage card now and must stay at the shipped odds. Boosts the
++	# first roll and every fused re-roll (both read card_chance).
++	if GameData.is_mvp_card(card):
++		card_chance *= GameData.MOD_MVP_CARD_MULT
++
++
+ 	if not boss_card:
+ 		card_chance /= split
+ 
 diff --git a/work/60_patches/effective_0.2.12/scripts/core/player.gd b/work/60_patches/effective_0.2.12/scripts/core/player.gd
-index e8f5a5c..9e51a07 100644
+index e8f5a5c..20f339c 100644
 --- a/work/60_patches/effective_0.2.12/scripts/core/player.gd
 +++ b/work/60_patches/effective_0.2.12/scripts/core/player.gd
 @@ -1,6 +1,33 @@
@@ -255,7 +321,7 @@ index e8f5a5c..9e51a07 100644
 +# the Lv 443 / 40-minute mark (35.3M -> 53.0M XP), not +50%. It also raises Class Lv, because Class
 +# EXP is roundi(xp_gained), which this feeds. See PATCH_SYSTEM.md §14.
 +const MOD_XP_MULT: = 1.5
-+const MOD_TAG: = "mod-v16 on 0.2.12 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16]"
++const MOD_TAG: = "mod-v17 on 0.2.12 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16] mvp_card=2.4"
 +
  
  signal leveled_up

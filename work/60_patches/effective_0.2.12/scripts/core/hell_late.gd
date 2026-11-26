@@ -336,6 +336,10 @@ func shadow_down(e: Enemy) -> void :
 	var card: = str(e.def.get("card", ""))
 	var p: Player = world.player
 	var drop: = 1.0 + (float(p.effects.get("drop_find", 0.0)) if p != null and is_instance_valid(p) else 0.0)
+	# [MOD] MOD_MVP_CARD_MULT: this shadow's own card is an MVP card by construction (shadows are stage
+	# MVPs), but keep the same is_mvp_card() gate as World._kill. `drop` is used only by the roll below.
+	if GameData.is_mvp_card(card):
+		drop *= GameData.MOD_MVP_CARD_MULT
 	if GameData.CARDS.has(card) and randf() < GameData.MVP_CARD_CHANCE * GameData.HELL_SHADOW_CARD * drop\
 	* (GameData.PRIDE_CARD if world.pride_on() else 1.0):
 		world._drop_item(e.position + Vector3(0.6, 0, 0), "card", card)

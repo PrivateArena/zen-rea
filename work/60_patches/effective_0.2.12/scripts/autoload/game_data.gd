@@ -10545,6 +10545,13 @@ const MVP_SUMMON_CARD_PITY: = 25
 const MVP_FIGHT_CARD_CHANCE: = 0.3
 const MVP_CARD_CHANCE: = 0.285
 
+# [MOD] MOD_MVP_CARD_MULT: multiplier on the drop chance of MVP cards ONLY. The gate at every roll site
+# is GameData.is_mvp_card(card) - the card id, not the monster kind - so mob/elite/boss/raid-fight cards
+# keep their shipped odds (CARD_DROP_CHANCE, ELITE_CARD_CHANCE, BOSS_CARD_CHANCE, MVP_FIGHT_CARD_CHANCE
+# are untouched). Sites: World._kill (boss MVP, plus every MVP card that survives the hell pool swap)
+# and world.hell_late.shadow_down (hell shadow MVPs). 2.4 => 0.285 * 2.4 = 0.684 per MVP kill.
+const MOD_MVP_CARD_MULT: = 2.4
+
 const CARD_LUK_BONUS: = 0.02
 
 const ELITE_CARD_CHANCE: = 0.076

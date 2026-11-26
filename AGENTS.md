@@ -34,7 +34,7 @@ telemetry/leaderboard/cloud-save/update-manifest only. Consequence: `Rizin/Cutte
 | `work/10_evidence/` | 2 REA inventory bundles (45 MB each) |
 | `work/25_scripts/` | scripts-only recovery — the fast place to grep/read GDScript |
 | `work/30_recovered/` | full recovered project, 2.0 GB, 26,746 files (the only copy since `40_mod` was deleted 2026-11-19) |
-| `work/60_patches/` | **the live patch layer + all mod work.** `PATCH_SYSTEM.md` = findings (§7 balance map, §10 update behaviour, §14 + §19 = migrations, §20 = the scripted pipeline, **§22 = the 0.2.11 bridge split + the manifest rework + mod v16**). `SWORD_WINGS_FARM_GUIDE.md` = the tier-`slots` item bug (`ITEM_TIERS[slots]` multiplies every base mod) + the Endless Tower run-clock/chest farming recipe; §11 = the scripted Naght Sieger wings award, the "Mítico" grade and the Emperium altar as a third mint source, §12 = mod v15. `effective_0.2.12/` = **the 180 `.gd` tree the game really runs** (git-tracked source; `effective_0.2.7/`, `effective_0.2.3/`, `effective_0.2.4/` kept as history). `update.sh` = one command after an official patch (`layer_sync.sh` ingest+tag → `layer_diff.sh` report → `mod_apply.sh` re-apply+audit), `build.sh` = compile→pack→verify→install (version **and pack name** from `state.json` via `layer_env.sh`), `lint-allow.txt` = intentionally-replaced shipped lines, `mod-latest.patch` / `mod-0.2.12.patch`, `orig/` = **the only pristine pack backups** (`patch_0.2.3/0.2.4/0.2.5/0.2.7/0.2.12.pck`; the 228 MB bridge is *not* copied — its sha256+size go to the tracked `work/logs/layer-hashes-<ver>.txt`, and `work/logs/layer-manifest-<ver>.tsv` records the mount set) |
+| `work/60_patches/` | **the live patch layer + all mod work.** `PATCH_SYSTEM.md` = findings (§7 balance map, §10 update behaviour, §14 + §19 = migrations, §20 = the scripted pipeline, **§22 = the 0.2.11 bridge split + the manifest rework + mod v16**, **§23 = the card economy + mod v17 MVP odds**). `SWORD_WINGS_FARM_GUIDE.md` = the tier-`slots` item bug (`ITEM_TIERS[slots]` multiplies every base mod) + the Endless Tower run-clock/chest farming recipe; §11 = the scripted Naght Sieger wings award, the "Mítico" grade and the Emperium altar as a third mint source, §12 = mod v15. `effective_0.2.12/` = **the 180 `.gd` tree the game really runs** (git-tracked source; `effective_0.2.7/`, `effective_0.2.3/`, `effective_0.2.4/` kept as history). `update.sh` = one command after an official patch (`layer_sync.sh` ingest+tag → `layer_diff.sh` report → `mod_apply.sh` re-apply+audit), `build.sh` = compile→pack→verify→install (version **and pack name** from `state.json` via `layer_env.sh`), `lint-allow.txt` = intentionally-replaced shipped lines, `mod-latest.patch` / `mod-0.2.12.patch`, `orig/` = **the only pristine pack backups** (`patch_0.2.3/0.2.4/0.2.5/0.2.7/0.2.12.pck`; the 228 MB bridge is *not* copied — its sha256+size go to the tracked `work/logs/layer-hashes-<ver>.txt`, and `work/logs/layer-manifest-<ver>.tsv` records the mount set) |
 | `work/50_roundtrip/` | write-path sandbox; `REPORT.md` = the verified patch recipe; `launch_test/` = ready-to-run fixture |
 | `work/logs/` | `pck-files.txt`, `verify.baseline.json`, per-run logs |
 | `PROJECT_OVERVIEW.md` (env) · `work/README.md` (dir map) | boot reading |
@@ -50,9 +50,11 @@ Key numbers: env 830 MB on nvme; work 2.8 GB on `/media/jang/free` (6.2 GB free 
    on a conflict instead of shipping one, and **dies** if a mounted pack is missing. Install only after a
    play-test: `./update.sh --skip-sync --install`.
 
-1. **Play-test mod v16 on 0.2.12** *(human — `./play.sh`, no args after `--`)*: v16 is a pure port of v15 (51
-   knob sites identical, added lines identical) and v15's tower numbers are already confirmed (`gap=8.9 floors`,
-   emperium 56.5 % of events), so test the 0.2.12-specific things: the altar mix (Emperium ≈1 spawn in 5, its
+1. **Play-test mod v17 on 0.2.12** *(human — `./play.sh`, no args after `--`; v17 IS installed and also carries
+   the never-play-tested v16 port)*: v17 = the v16 port of v15 + one knob (§23). Check the new **MVP-card
+   rate** first — `user://mod_probe_cards.txt` prints `cards this run: mvp=<n> other=<n>` off the real pickup
+   list; 7 → ~17 expected at `MOD_MVP_CARD_MULT 2.4` (`game_data.gd:10553`; retune there, then `./build.sh --deep --install`).
+   Then the 0.2.12-specific things: the altar mix (Emperium ≈1 spawn in 5, its
    guard fight → MVP Treasure Box + 1 level), Star Crumb rate with the fused `_hits()` roll + Golden Poring
    source (the devs rewrote that roll in 0.2.4), legendary frequency (≈1 in 10 offers), `×1.5` XP against the
    new curve, and the new content the mod deliberately does **not** touch (`rebel`/`thief_arts`/`job_board`/
@@ -99,13 +101,29 @@ therefore `git diff v0.2.12-decompiled` **is** the mod. Never `git add -f` a `.p
 step completes.
 
 ```sh
-git log --oneline | head -1                # 4269cb6 unless you committed something
+git log --oneline | head -1                # the v17 commit unless you committed something
 git status --porcelain | wc -l             # expect 0 between steps
 git diff --stat v0.2.12-decompiled -- work/60_patches/effective_0.2.12   # = the mod
 cd work/60_patches && ./update.sh --dry-run      # what the next official patch would do (§22.5)
 ```
 
 ## Log
+
+**2026-11-26 (latest)** — **mod v17: MVP-card-only odds (built + installed `77100149e20fbc9f…`)** —
+play-test report: ~7 MVP cards per run at Hell 15 / Oath 40, wanted ≥ double, nothing else touched. One
+knob `MOD_MVP_CARD_MULT 2.4` (§23). Three findings: a boss MVP card is **not** difficulty-scaled
+(`main.gd:12843` computes `× danger_cards()`, `:12852` overwrites the whole value with `MVP_CARD_CHANCE`, so
+Hell 1 and Hell 15 are both 28.5 %); in hell the kill's card is re-rolled out of a stage pool that excludes
+MVP mobs (`_stage_cards:5663`), so the gate is the **final card id** (`is_mvp_card`, 26 ids) and not the mob
+kind, otherwise the boost would land on stage cards; and neither pity path can hand out an MVP card
+(`BOSS_CARD_PITY` skips MVPs, `MVP_SUMMON_CARD_PITY` arms only for the raid *adds* — measured 0 MVP cards in
+all 25 `RAIDS` pools), so `_fight_card` and both pities stay as shipped. Applied at the only two sites that
+use `MVP_CARD_CHANCE`: `main.gd:12894` and `hell_late.gd:342` → per MVP kill 0.285 → 0.684, per shadow
+0.071 → 0.171, i.e. expected 7 → 16.8/run (a hair less in practice: pride ×2 / Bubble Gum ×2 then saturate at
+1.0, which makes those kills guaranteed cards). New probe `user://mod_probe_cards.txt` counts real pickups per
+run off `run_cards`. Pure insertion at all three sites (`lint-allow.txt` unchanged), format strings exercised
+under headless 4.7.2 (`work/logs/mvp_cards/`), `mod_apply.sh --check` = 0/0/0 with 51 old knob sites intact,
+`build.sh --deep` clean. v17 also carries the never-play-tested v16 port — the play-test covers both.
 
 **2026-11-25 (latest)** — **Official update 0.2.7 -> 0.2.12 handled: the layer model changed, the pipeline was
 rebuilt around it, mod re-applied as v16 (built `55ab9e01a28f29c0…`, NOT installed pending play-test)** —

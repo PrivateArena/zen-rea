@@ -971,3 +971,62 @@ Then read the report. The shape of the update decides what to expect:
 Whatever the shape: `orig/` must end up holding the pristine **patch** pack (the build base) and
 `work/logs/layer-manifest-<ver>.tsv` + `layer-hashes-<ver>.txt` must be committed — those two files plus the
 tag are all that survives of a build once the updater has deleted the packs.
+
+---
+
+## 23. Mod v17 — MVP cards only (installed, pack sha `77100149e20fbc9f…`)
+
+Player observation: **~7 MVP cards per run** at Hell 15 / Oath 40, wanted ≥ 2× (16–17) *without* touching
+any other card ("they are already dropping a lot"). One knob, `GameData.MOD_MVP_CARD_MULT` = 2.4
+(`game_data.gd:10553`, right under the const it scales). Line numbers below are the **shipped** ones; our
+blocks sit at `main.gd:12890-12894` (kill roll), `hell_late.gd:339-342` (shadow) and `main.gd:4269-4282` (probe).
+
+**The card economy of 0.2.12 in one table.** Four chances, three roll sites, and they are independent:
+
+| site | chance used | what it can produce | v17 |
+| --- | --- | --- | --- |
+| `main.gd:12843` mob / elite / feroz kill | `CARD_DROP_CHANCE 0.00038` / `ELITE_CARD_CHANCE 0.076` / `FEROCIOUS.card`, × `danger_cards()` | the stage card pool (`_stage_cards`, which skips MVP mobs at `:5663`) | unchanged |
+| `main.gd:12852` boss kill | **`MVP_CARD_CHANCE 0.285`** if the def has `mvp: true`, else `BOSS_CARD_CHANCE 0.1425` | the boss's own card, or a stage card after the hell swap | **× mult** |
+| `hell_late.gd:339` hell shadow of the stage MVP | **`MVP_CARD_CHANCE 0.285`** × `HELL_SHADOW_CARD 0.25` | the shadow's own card = an MVP card | **× mult** |
+| `main.gd:17236` `_fight_card` (raid cleared) | `MVP_FIGHT_CARD_CHANCE 0.3` | a card of the MVP's *add* mobs | unchanged |
+
+Three findings that shaped the patch:
+
+1. **A boss MVP card is not difficulty-scaled.** `:12843` multiplies by `danger_cards(danger)` and `:12852`
+   then *replaces* the whole value, so it is 28.5 % at Hell 1 and at Hell 15 alike. The only movers are
+   `drop` (`drop_find`: Bubble Gum 2.0) and `PRIDE_CARD` (×2 while the MVP pride is up).
+2. **Gate on the card id, not on the monster.** In hell/endless `:12869` re-rolls the card of almost every
+   kill out of the stage pool — including an MVP's, unless it is the stage's own MVP, a route/karma MVP
+   (`_is_route_mvp`) or a raid boss (`fight_own`). So both new blocks test `GameData.is_mvp_card(card)`
+   *after* the swap: 26 ids (30 MVP mobs, `naght_sieger`/`morroc_kid`/`morroc_adult`/`training_dummy_mvp`
+   ship no card). Boosting on the mob kind would have quietly doubled a stream of stage cards instead.
+3. **The pity paths are not MVP-card sources.** `BOSS_CARD_PITY 5` is explicitly skipped for MVPs
+   (`:12878 not e.def.get("mvp")`) and `MVP_SUMMON_CARD_PITY 25` only arms for *summoned non-boss* mobs, i.e.
+   the raid adds; `work/logs/mvp_cards/mk.py` walks every `RAIDS[*].abilities[*]` mob list and finds **0**
+   MVP cards in those pools, so nothing there needed a knob.
+
+**Effect.** Per MVP kill 0.285 → **0.684**, per shadow 0.0712 → **0.171**; expectation is linear in the
+multiplier, so 7 → **16.8** MVP cards per run. Where it saturates: with the MVP pride up the chance is
+0.684 × 2 = 1.368 and Bubble Gum gives another ×2, so during those windows an MVP kill is a *guaranteed*
+card and the realised gain is a little under 2.4×. Retune by editing the one const
+(`game_data.gd:10553`): 2.0 → 14/run, 2.4 → 16.8, 3.0 → 21.
+
+**Probe** — `user://mod_probe_cards.txt`, rewritten on every card pickup by `World._take_card` off
+`run_cards` (the per-run pickup list, i.e. exactly what the player counts and what the summary reports):
+
+```
+mod-v17 mvp_card_mult=2.40  chance per MVP kill=0.684 (shipped 0.285)
+run: hell=15  danger=30  time=2400 s  mvps_killed=26  level=400
+cards this run: mvp=1  other=2  total=3
+last: baphomet_card  mvp=true  new=true
+```
+
+**Checks** — `work/logs/mvp_cards/mk.py` (which ids the gate catches, no raid-pool leak, the four untouched
+chances) and `work/logs/mvp_cards/sim.gd` (the four `store_line` format strings executed under headless
+Godot 4.7.2 → `probe_format.txt`; the mod-v2 lesson). All three code sites are pure insertion, so
+`lint-allow.txt` gained nothing. `mod_apply.sh --check`: 0 conflicts / 0 moved sites / 0 lint gaps, 51 old
+knob sites still in their functions; `build.sh --deep`: every new source line found in the bytecode, the two
+"inspect" flags are the known re-wrapped ones from §21/§22.
+
+v17 also carries everything from v16 (the untested 0.2.12 port of v15) — the two are not separable at
+runtime, so a play-test of v17 is a play-test of v16 as well.

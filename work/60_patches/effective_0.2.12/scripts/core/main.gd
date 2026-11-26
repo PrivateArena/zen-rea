@@ -4266,6 +4266,22 @@ func _take_card(card_id: String, at: Vector3) -> void :
 	run_cards.append({"id": card_id, "new": is_new})
 
 
+	# [MOD] measured MVP-card income -> user://mod_probe_cards.txt, rewritten on every pickup. run_cards is
+	# the per-run pickup list, so this counts what the player actually collected, which is the number
+	# MOD_MVP_CARD_MULT is tuned against (~7 MVP cards per run at Hell 15 with mult = 1).
+	var mod_mvp: = 0
+	for mod_c in run_cards:
+		if GameData.is_mvp_card(str(mod_c.get("id", ""))):
+			mod_mvp += 1
+	var mod_f: = FileAccess.open("user://mod_probe_cards.txt", FileAccess.WRITE)
+	if mod_f != null:
+		mod_f.store_line("mod-v17 mvp_card_mult=%.2f  chance per MVP kill=%.3f (shipped %.3f)" % [GameData.MOD_MVP_CARD_MULT, GameData.MVP_CARD_CHANCE * GameData.MOD_MVP_CARD_MULT, GameData.MVP_CARD_CHANCE])
+		mod_f.store_line("run: hell=%d  danger=%d  time=%d s  mvps_killed=%d  level=%d" % [GameData.hell_level(danger), danger, int(time), run_mvps, player.level])
+		mod_f.store_line("cards this run: mvp=%d  other=%d  total=%d" % [mod_mvp, run_cards.size() - mod_mvp, run_cards.size()])
+		mod_f.store_line("last: %s  mvp=%s  new=%s" % [card_id, str(GameData.is_mvp_card(card_id)), str(is_new)])
+		mod_f.close()
+
+
 
 	if is_new and not menus.auto_pick:
 		_card_window(card_id, true, false)
@@ -12869,6 +12885,13 @@ func _kill(e: Enemy) -> void :
 	if (endless or GameData.hell_level(danger) >= 1) and not _is_stage_mob(e.id) and not _is_route_mvp(e) and not fight_own and not morroc.is_boss(e):
 		var pool: = _stage_cards(e.is_boss)
 		card = "" if pool.is_empty() else str(pool.pick_random())
+
+
+	# [MOD] MOD_MVP_CARD_MULT: MVP cards only. Gated on the FINAL card id - if the hell pool swap above
+	# took this kill's card away it is a stage card now and must stay at the shipped odds. Boosts the
+	# first roll and every fused re-roll (both read card_chance).
+	if GameData.is_mvp_card(card):
+		card_chance *= GameData.MOD_MVP_CARD_MULT
 
 
 	if not boss_card:
