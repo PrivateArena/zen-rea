@@ -10552,6 +10552,16 @@ const MVP_CARD_CHANCE: = 0.285
 # and world.hell_late.shadow_down (hell shadow MVPs). 2.4 => 0.285 * 2.4 = 0.684 per MVP kill.
 const MOD_MVP_CARD_MULT: = 2.4
 
+# [MOD] MOD_MORROC_SPAWN: multiplier on the two Satan Morroc spawn rolls only. MorrocEvent.plan()
+# (one roll per normal run, MORROC.chance 0.35 -> 0.70) and MorrocEvent._schedule() (the endless
+# re-roll every MORROC.endless_every, 0.3 -> 0.6, still spaced by endless_gap 300s). Nothing else
+# on the path is touched: the danger >= MORROC.min_danger gate, the 300-360s window, the hard
+# deadline at stage-MVP minus (mvp_gap + omen), the 5s retry, the open-arena search and the
+# one-per-normal-run limit all stay as shipped, so 2.0 raises the per-run rate to ~70% x P(arena).
+# Values >= 2.86 make the roll itself always pass; only then does the arena search / deadline
+# become the whole remaining risk on tight dungeon maps.
+const MOD_MORROC_SPAWN: = 2.0
+
 const CARD_LUK_BONUS: = 0.02
 
 const ELITE_CARD_CHANCE: = 0.076

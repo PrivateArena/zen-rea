@@ -50,9 +50,14 @@ Key numbers: env 830 MB on nvme; work 2.8 GB on `/media/jang/free` (6.2 GB free 
    on a conflict instead of shipping one, and **dies** if a mounted pack is missing. Install only after a
    play-test: `./update.sh --skip-sync --install`.
 
-1. **Play-test mod v17 on 0.2.12** *(human — `./play.sh`, no args after `--`; v17 IS installed and also carries
-   the never-play-tested v16 port)*: v17 = the v16 port of v15 + one knob (§23). Check the new **MVP-card
-   rate** first — `user://mod_probe_cards.txt` prints `cards this run: mvp=<n> other=<n>` off the real pickup
+1. **Play-test mod v18 on 0.2.12** *(human — `./play.sh`, no args after `--`; **v17 is what is installed**,
+   v18 = v17 + the Satan Morroc spawn knob is built and waiting on this test; v18 also carries the
+   never-play-tested v16 port)*: check the new **Satan Morroc rate** first (§24) — the omen + boss should now
+   appear in ≈7 runs out of 10 on an eligible map (Geffen-region and up, danger ≥ 5; never in Endless Tower,
+   one per run) somewhere around 5:00–6:00, and `+5 niveles` on every hero at the kill. Retune
+   `MOD_MORROC_SPAWN` at `game_data.gd:10563` (1.43 → 50 %, 2.86 → always), then
+   `./build.sh --deep --install`. Then the v17 **MVP-card
+   rate** — `user://mod_probe_cards.txt` prints `cards this run: mvp=<n> other=<n>` off the real pickup
    list; 7 → ~17 expected at `MOD_MVP_CARD_MULT 2.4` (`game_data.gd:10553`; retune there, then `./build.sh --deep --install`).
    Then the 0.2.12-specific things: the altar mix (Emperium ≈1 spawn in 5, its
    guard fight → MVP Treasure Box + 1 level), Star Crumb rate with the fused `_hits()` roll + Golden Poring
@@ -108,6 +113,21 @@ cd work/60_patches && ./update.sh --dry-run      # what the next official patch 
 ```
 
 ## Log
+
+**2026-11-27** — **mod v18: Satan Morroc spawn chance (built `e76c6c75432c6870…`, NOT installed pending the
+play-test)** — player asked how the +5-levels MVP is rolled. Full path written up as **§24**: it is
+`MorrocEvent`, not `game_data` spawn tables — one fixed `randf() < MORROC.chance 0.35` per run
+(`morroc_event.gd:235`, called from `start_run`), then a 300–360 s window, a **hard deadline** at stage-MVP
+minus 120 s, a 5 s retry against `_can_start()` (raid/boss/**elite**/golden poring/quest/downed) and an
+open-arena search (radius 15, fallback 10). Not hell-scaled, not pity-driven, sticky across save/resume.
+Measured the arena term off the shipped `.gat` grids: 98 % on open fields but 46 % in Mjolnir Dead Pit /
+61 % Cursed Abbey ⇒ **16–35 % per run**, and **0 %** in any region whose `min_danger < 5` (Prontera, Payon,
+Alberta and — ironically — **Morroc**: Pyramid/Ant Hell) at default difficulty. One knob
+`MOD_MORROC_SPAWN 2.0` at the only two read sites (`:235` normal, `:281` endless re-roll) ⇒ 35 → 70 % per
+run, endless 1/500 s → 1/410 s. 2 line rewrites (+2 `lint-allow.txt` rows), const is pure insertion,
+`mod_apply.sh --check` 0/0/0 with 51 old sites + 2 new ones in the right functions, `build.sh --deep` clean.
+Deliberately untouched: the `danger ≥ 5` gate, the one-per-run limit, the arena radius (smaller arena = a
+worse fight).
 
 **2026-11-26 (latest)** — **mod v17: MVP-card-only odds (built + installed `77100149e20fbc9f…`)** —
 play-test report: ~7 MVP cards per run at Hell 15 / Oath 40, wanted ≥ double, nothing else touched. One

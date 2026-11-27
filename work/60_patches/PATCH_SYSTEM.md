@@ -1030,3 +1030,74 @@ knob sites still in their functions; `build.sh --deep`: every new source line fo
 
 v17 also carries everything from v16 (the untested 0.2.12 port of v15) — the two are not separable at
 runtime, so a play-test of v17 is a play-test of v16 as well.
+
+---
+
+## 24. Mod v18 — Satan Morroc spawn chance (built, pack sha `e76c6c75432c6870…`, not installed)
+
+Player observation: Satan Morroc (the MVP that hands **+5 levels to every hero**) shows up "sometimes", and
+one appearance decides a run. Question: is the default rate low, and where is the knob? Answer: **35 % per
+eligible run, and the 35 % is not the main leak.**
+
+**The whole spawn path** (`MorrocEvent`, `scripts/core/morroc_event.gd`; the config is
+`GameData.MORROC` at `game_data.gd:10492`, the reward const is `MORROC_LEVELS = 5` at `:10362`):
+
+```
+World.start_run (main.gd:1560) -> MorrocEvent.plan() (morroc_event.gd:217)
+  :233  if autopilot or showcase or world.danger < MORROC.min_danger (5) -> return     # GATE
+  :235  elif randf() < MORROC.chance (0.35)                                             # THE ONLY ROLL
+  :236    latest = world.mvp_at() - mvp_gap(100) - omen(20)                             # hard deadline
+  :239    if latest > MORROC.from (300): _planned_at = randf_range(300, min(latest, 360))
+World._process (main.gd:4901) -> tick -> _schedule() (:272)
+  :285  world.time > deadline            -> _planned_at = INF      # cancelled for the rest of the run
+  :290  _can_start() false               -> retry in 5 s          # raid/boss/elite/runner/quest/downed/tower
+  :293  _find_arena() empty              -> retry in 5 s          # open disc r>=15, fallback r>=10
+  :297  _planned_at = INF                                         # exactly ONE per normal run
+  :308  _begin_omen() 20 s -> _spawn_boss() (:641)
+```
+Fixed probability, not a weighted pool: **no pity, no hell scaling** (`hell_level()` never enters
+`chance`; hell/danger only scale its HP/damage at `:660`). `danger >= 5` is satisfied automatically from
+the **Geffen region up**, and unreachable at default difficulty in Prontera/Payon/Alberta/**Morroc**
+(`REGIONS[*].min_danger`, `game_data.gd:11461`) — the Morroc-region maps Pyramid and Ant Hell are the
+ironic exclusions. The outcome is sticky across save/resume (`RunSave` stores it, `run_save.gd:97`, and
+refuses to save while the fight is live), so "Continue" does not re-roll.
+
+**Realised probability per run** — `chance × P(arena found before the deadline)`. The arena term was
+measured by replaying `_open_radius`/`_find_arena` (`:405`, `:430`: 24 rays, ring fails at >6 blocked,
+2 m steps) in Python over the shipped `.gat` grids (`work/30_recovered/assets/ro/maps/*.gat`, GZIP, walk
+byte `'1'`, 1 tile = 1 unit), 5 s retries, player drifting 10 u/5 s:
+
+| map | `mvp_at` | slack | 1-shot | with retries | × 0.35 |
+| --- | --- | --- | --- | --- | --- |
+| prt_fild08 (Prontera Field) | 480 | 30 s | 95 % | 98 % | 34.3 % |
+| orcsdun01 (Orc Dungeon) | 580 | 130 | 58 % | 87 % | 30.4 % |
+| nameless_n | 620 | 170 | 44 % | 85 % | 29.8 % |
+| abbey02 (Cursed Abbey) | 640 | 190 | 26 % | 61 % | 21.4 % |
+| mjo_dun01 (Mjolnir Dead Pit) | 575 | 125 | 13 % | 46 % | **16.1 %** |
+| jupe_core | 630 | 180 | 38 % | 70 % | 24.4 % |
+
+Two further silent losers: any **elite** event sets `world.boss` too (`main.gd:5759`) and stage elites sit at
+290/320/360 s, right inside the window; and an untouched quest NPC blocks `_can_start()` from 60 s onward
+(`QUEST_AT`, `game_data.gd:9681`). With the `mvp_early` altar (`-60 s`) on a 480 s stage the deadline lands
+*at* 300 s, so `latest > from` is false and the event cannot happen that run at all.
+
+**Endless mode** is a separate roll in `_schedule():281`: `endless_chance 0.3` every `endless_every 150 s`,
+spaced by `endless_gap 300 s`, off after `finale_at() - 150` ⇒ ≈ 1 spawn per 500 s. **Endless Tower never
+gets it** (`_can_start` returns false when `world.tower != null`). Do not confuse the random spawn with the
+Infinite finale boss `morroc_kid`/`morroc_adult` (`MORROC_FINALE`, `game_data.gd:10375`, 2400 s) — the
+finale pays chest/zeny/coins but **no levels** (`_finale_won :2077`).
+
+**The knob** — `GameData.MOD_MORROC_SPAWN: = 2.0` (`game_data.gd:10563`), multiplied into the only two
+read sites of `chance` / `endless_chance` (`morroc_event.gd:235`, `:281`; verified as the only two). Both
+are line rewrites ⇒ 2 new `lint-allow.txt` rows. Everything else stays shipped: gate, window, deadline,
+retry, arena, one-per-run. **Effect: 35 % → 70 % of eligible runs** (16–35 % → 32–70 % per map), endless
+0.3 → 0.6 per roll ≈ 1 / 410 s. Retune at the const: 1.43 → 50 %, 2.86 → the roll always passes, and above
+that only the arena/deadline can still lose the run. Known untouched by design: `MORROC.gems: 14` is
+**dead code** (never read anywhere) and the bestiary text (`bestiary.gd:315`) describes only the danger
+gate and the 5:00 start, so it still reads correctly.
+
+**Checks** — `mod_apply.sh --check`: 0 conflicts / 0 moved sites / 0 lint gaps, 51 old knob sites still in
+their functions + 2 `new?` sites correctly placed in `plan()` / `_schedule()`; `build.sh --deep` clean
+(13 files, `morroc_event: every source line present in the bytecode`); no new format strings, the only
+textual change outside the knob is the `mod-v17` → `mod-v18` prefix in the cards-probe header
+(`main.gd:4278`). v18 = v17 + this knob, so the pending v17 play-test covers both.

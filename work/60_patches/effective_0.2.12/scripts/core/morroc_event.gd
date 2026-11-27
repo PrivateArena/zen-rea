@@ -232,7 +232,7 @@ func plan() -> void :
 		_planned_at = float(GameData.get_meta("morroc_at"))
 	elif world.autopilot or world.showcase or world.danger < int(data.min_danger):
 		return
-	elif randf() < float(data.chance):
+	elif randf() < float(data.chance) * GameData.MOD_MORROC_SPAWN:
 		var latest: = world.mvp_at() - float(data.mvp_gap) - float(data.omen)
 
 
@@ -278,7 +278,7 @@ func _schedule() -> void :
 	if world.endless and not GameData.has_meta("morroc_at") and not world.autopilot and world.danger >= int(data.min_danger) and world.time >= _endless_next\
 	and world.time < finale_at() - float(data.endless_gap) * 0.5:
 		_endless_next = world.time + float(data.endless_every)
-		if world.time - _last_at >= float(data.endless_gap) and randf() < float(data.endless_chance):
+		if world.time - _last_at >= float(data.endless_gap) and randf() < float(data.endless_chance) * GameData.MOD_MORROC_SPAWN:
 			_planned_at = world.time
 	if world.time < _planned_at:
 		return

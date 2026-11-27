@@ -1,5 +1,5 @@
 diff --git a/work/60_patches/effective_0.2.12/scripts/autoload/game_data.gd b/work/60_patches/effective_0.2.12/scripts/autoload/game_data.gd
-index 99431c4..aa48d82 100644
+index 99431c4..a7be5f9 100644
 --- a/work/60_patches/effective_0.2.12/scripts/autoload/game_data.gd
 +++ b/work/60_patches/effective_0.2.12/scripts/autoload/game_data.gd
 @@ -1628,9 +1628,17 @@ const COSMETIC_RARITY: = {
@@ -73,7 +73,7 @@ index 99431c4..aa48d82 100644
  const HYPNO_AT: = [150.0, 330.0, 510.0]
  const HYPNO_ENDLESS_EVERY: = 180.0
  const HYPNO_LIFE: = 120.0
-@@ -10506,6 +10545,13 @@ const MVP_SUMMON_CARD_PITY: = 25
+@@ -10506,6 +10545,23 @@ const MVP_SUMMON_CARD_PITY: = 25
  const MVP_FIGHT_CARD_CHANCE: = 0.3
  const MVP_CARD_CHANCE: = 0.285
  
@@ -83,6 +83,16 @@ index 99431c4..aa48d82 100644
 +# are untouched). Sites: World._kill (boss MVP, plus every MVP card that survives the hell pool swap)
 +# and world.hell_late.shadow_down (hell shadow MVPs). 2.4 => 0.285 * 2.4 = 0.684 per MVP kill.
 +const MOD_MVP_CARD_MULT: = 2.4
++
++# [MOD] MOD_MORROC_SPAWN: multiplier on the two Satan Morroc spawn rolls only. MorrocEvent.plan()
++# (one roll per normal run, MORROC.chance 0.35 -> 0.70) and MorrocEvent._schedule() (the endless
++# re-roll every MORROC.endless_every, 0.3 -> 0.6, still spaced by endless_gap 300s). Nothing else
++# on the path is touched: the danger >= MORROC.min_danger gate, the 300-360s window, the hard
++# deadline at stage-MVP minus (mvp_gap + omen), the 5s retry, the open-arena search and the
++# one-per-normal-run limit all stay as shipped, so 2.0 raises the per-run rate to ~70% x P(arena).
++# Values >= 2.86 make the roll itself always pass; only then does the arena search / deadline
++# become the whole remaining risk on tight dungeon maps.
++const MOD_MORROC_SPAWN: = 2.0
 +
  const CARD_LUK_BONUS: = 0.02
  
@@ -106,7 +116,7 @@ index 8012a26..99a0c91 100644
  			pick = id
  			break
 diff --git a/work/60_patches/effective_0.2.12/scripts/core/enemy.gd b/work/60_patches/effective_0.2.12/scripts/core/enemy.gd
-index 50ac4d7..98463e1 100644
+index 50ac4d7..195ed58 100644
 --- a/work/60_patches/effective_0.2.12/scripts/core/enemy.gd
 +++ b/work/60_patches/effective_0.2.12/scripts/core/enemy.gd
 @@ -244,6 +244,15 @@ func _init() -> void :
@@ -118,7 +128,7 @@ index 50ac4d7..98463e1 100644
 +const MOD_TIME_SCALE_CAP: = 3.0
 +# [MOD] one-shot proof that this (patch-layer) script is the one the running process loaded.
 +# Enemy.setup() fires on every spawn in every mode, so the probe lands within seconds of a run start.
-+const MOD_TAG: = "mod-v17 on 0.2.12 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16] mvp_card=2.4"
++const MOD_TAG: = "mod-v18 on 0.2.12 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16] mvp_card=2.4 morroc_spawn=2.0"
 +static var mod_probe_done: = false
 +static var mod_probe_spawns: = 0
 +static var mod_clock_capped: = 0
@@ -212,7 +222,7 @@ index 49b4cfa..14f203f 100644
  
  
 diff --git a/work/60_patches/effective_0.2.12/scripts/core/main.gd b/work/60_patches/effective_0.2.12/scripts/core/main.gd
-index ca67adc..29efe1b 100644
+index ca67adc..41d4614 100644
 --- a/work/60_patches/effective_0.2.12/scripts/core/main.gd
 +++ b/work/60_patches/effective_0.2.12/scripts/core/main.gd
 @@ -268,6 +268,17 @@ func oath_mats() -> float:
@@ -246,7 +256,7 @@ index ca67adc..29efe1b 100644
 +			mod_mvp += 1
 +	var mod_f: = FileAccess.open("user://mod_probe_cards.txt", FileAccess.WRITE)
 +	if mod_f != null:
-+		mod_f.store_line("mod-v17 mvp_card_mult=%.2f  chance per MVP kill=%.3f (shipped %.3f)" % [GameData.MOD_MVP_CARD_MULT, GameData.MVP_CARD_CHANCE * GameData.MOD_MVP_CARD_MULT, GameData.MVP_CARD_CHANCE])
++		mod_f.store_line("mod-v18 mvp_card_mult=%.2f  chance per MVP kill=%.3f (shipped %.3f)" % [GameData.MOD_MVP_CARD_MULT, GameData.MVP_CARD_CHANCE * GameData.MOD_MVP_CARD_MULT, GameData.MVP_CARD_CHANCE])
 +		mod_f.store_line("run: hell=%d  danger=%d  time=%d s  mvps_killed=%d  level=%d" % [GameData.hell_level(danger), danger, int(time), run_mvps, player.level])
 +		mod_f.store_line("cards this run: mvp=%d  other=%d  total=%d" % [mod_mvp, run_cards.size() - mod_mvp, run_cards.size()])
 +		mod_f.store_line("last: %s  mvp=%s  new=%s" % [card_id, str(GameData.is_mvp_card(card_id)), str(is_new)])
@@ -288,8 +298,30 @@ index ca67adc..29efe1b 100644
  	if not boss_card:
  		card_chance /= split
  
+diff --git a/work/60_patches/effective_0.2.12/scripts/core/morroc_event.gd b/work/60_patches/effective_0.2.12/scripts/core/morroc_event.gd
+index e87ab33..37f50eb 100644
+--- a/work/60_patches/effective_0.2.12/scripts/core/morroc_event.gd
++++ b/work/60_patches/effective_0.2.12/scripts/core/morroc_event.gd
+@@ -232,7 +232,7 @@ func plan() -> void :
+ 		_planned_at = float(GameData.get_meta("morroc_at"))
+ 	elif world.autopilot or world.showcase or world.danger < int(data.min_danger):
+ 		return
+-	elif randf() < float(data.chance):
++	elif randf() < float(data.chance) * GameData.MOD_MORROC_SPAWN:
+ 		var latest: = world.mvp_at() - float(data.mvp_gap) - float(data.omen)
+ 
+ 
+@@ -278,7 +278,7 @@ func _schedule() -> void :
+ 	if world.endless and not GameData.has_meta("morroc_at") and not world.autopilot and world.danger >= int(data.min_danger) and world.time >= _endless_next\
+ 	and world.time < finale_at() - float(data.endless_gap) * 0.5:
+ 		_endless_next = world.time + float(data.endless_every)
+-		if world.time - _last_at >= float(data.endless_gap) and randf() < float(data.endless_chance):
++		if world.time - _last_at >= float(data.endless_gap) and randf() < float(data.endless_chance) * GameData.MOD_MORROC_SPAWN:
+ 			_planned_at = world.time
+ 	if world.time < _planned_at:
+ 		return
 diff --git a/work/60_patches/effective_0.2.12/scripts/core/player.gd b/work/60_patches/effective_0.2.12/scripts/core/player.gd
-index e8f5a5c..20f339c 100644
+index e8f5a5c..f1861d8 100644
 --- a/work/60_patches/effective_0.2.12/scripts/core/player.gd
 +++ b/work/60_patches/effective_0.2.12/scripts/core/player.gd
 @@ -1,6 +1,33 @@
@@ -321,7 +353,7 @@ index e8f5a5c..20f339c 100644
 +# the Lv 443 / 40-minute mark (35.3M -> 53.0M XP), not +50%. It also raises Class Lv, because Class
 +# EXP is roundi(xp_gained), which this feeds. See PATCH_SYSTEM.md §14.
 +const MOD_XP_MULT: = 1.5
-+const MOD_TAG: = "mod-v17 on 0.2.12 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16] mvp_card=2.4"
++const MOD_TAG: = "mod-v18 on 0.2.12 caps: clock=3.0 tower_floor=90 trap_pct=0.10 mechanics_pct=0.15 choice_w=[52,27,15,6] xp=1.5 crumb=2.5 crumb_sites=2 pot_up=[30,18] pot_same=0.85 perfect=0.80 stats_w=12 refine=x2 grade=[1,1.15,1.5,2,2.6] altar_w=[6,3,0.8] altar_emp=6.0 karma_baldur=0.75 gacha_odds=[40,30,15,10,5] event_w=emperium9 emp_every=9 emp_grow=1.4 emp_time=15 emp_prizes=[5,7,9,12,16] mvp_card=2.4 morroc_spawn=2.0"
 +
  
  signal leveled_up

@@ -4275,7 +4275,7 @@ func _take_card(card_id: String, at: Vector3) -> void :
 			mod_mvp += 1
 	var mod_f: = FileAccess.open("user://mod_probe_cards.txt", FileAccess.WRITE)
 	if mod_f != null:
-		mod_f.store_line("mod-v17 mvp_card_mult=%.2f  chance per MVP kill=%.3f (shipped %.3f)" % [GameData.MOD_MVP_CARD_MULT, GameData.MVP_CARD_CHANCE * GameData.MOD_MVP_CARD_MULT, GameData.MVP_CARD_CHANCE])
+		mod_f.store_line("mod-v18 mvp_card_mult=%.2f  chance per MVP kill=%.3f (shipped %.3f)" % [GameData.MOD_MVP_CARD_MULT, GameData.MVP_CARD_CHANCE * GameData.MOD_MVP_CARD_MULT, GameData.MVP_CARD_CHANCE])
 		mod_f.store_line("run: hell=%d  danger=%d  time=%d s  mvps_killed=%d  level=%d" % [GameData.hell_level(danger), danger, int(time), run_mvps, player.level])
 		mod_f.store_line("cards this run: mvp=%d  other=%d  total=%d" % [mod_mvp, run_cards.size() - mod_mvp, run_cards.size()])
 		mod_f.store_line("last: %s  mvp=%s  new=%s" % [card_id, str(GameData.is_mvp_card(card_id)), str(is_new)])
