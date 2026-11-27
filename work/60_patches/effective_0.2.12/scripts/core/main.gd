@@ -276,7 +276,7 @@ func oath_mats() -> float:
 # packed monster, which the multiplier rides the same way. Still 0 below Hell 10 / in festival mode,
 # which is how the game gates the farm. NOT applied to the world-boss chest tables (a fixed
 # `star_crumb` amount per chest grade, GameData.wb_chest_items() game_data.gd:378-386) - reward, not roll.
-const MOD_CRUMB_MULT: = 2.5
+const MOD_CRUMB_MULT: = 1.25
 
 
 func star_crumb_chance(e: Enemy) -> float:
