@@ -222,7 +222,7 @@ index 49b4cfa..14f203f 100644
  
  
 diff --git a/work/60_patches/effective_0.2.12/scripts/core/main.gd b/work/60_patches/effective_0.2.12/scripts/core/main.gd
-index ca67adc..41d4614 100644
+index ca67adc..24e5755 100644
 --- a/work/60_patches/effective_0.2.12/scripts/core/main.gd
 +++ b/work/60_patches/effective_0.2.12/scripts/core/main.gd
 @@ -268,6 +268,17 @@ func oath_mats() -> float:
@@ -237,7 +237,7 @@ index ca67adc..41d4614 100644
 +# packed monster, which the multiplier rides the same way. Still 0 below Hell 10 / in festival mode,
 +# which is how the game gates the farm. NOT applied to the world-boss chest tables (a fixed
 +# `star_crumb` amount per chest grade, GameData.wb_chest_items() game_data.gd:378-386) - reward, not roll.
-+const MOD_CRUMB_MULT: = 2.5
++const MOD_CRUMB_MULT: = 1.25
 +
 +
  func star_crumb_chance(e: Enemy) -> float:
